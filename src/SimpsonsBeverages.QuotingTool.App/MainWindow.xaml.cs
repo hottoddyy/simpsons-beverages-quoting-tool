@@ -145,6 +145,9 @@ public partial class MainWindow : Window
     private const string BundledMasterTemplatePath = "Templates\\costing-template.xlsx";
     private const string QuoteSaveRoot = @"\\adserver2\Company Share\Sales\Quotes\2026";
 
+    private readonly QuoteStore _quoteStore = new();
+    private string? _quoteNumber;
+
     public ObservableCollection<QuoteLineViewModel> Lines { get; } = [];
     public ObservableCollection<QuotePreviewLineViewModel> PreviewLines { get; } = [];
     private bool _isRecalculating;
@@ -170,6 +173,9 @@ public partial class MainWindow : Window
         RecalculateQuote();
         _hasUnsavedChanges = false;
         _isInitializing = false;
+
+        try { _quoteStore.Initialise(); }
+        catch { /* network unavailable — quote store disabled */ }
     }
 
     private void HeaderInputChanged(object sender, TextChangedEventArgs e)
@@ -250,11 +256,88 @@ public partial class MainWindow : Window
     private void ResetClicked(object sender, RoutedEventArgs e)
     {
         PushUndoSnapshot();
+        _quoteNumber = null;
+        UpdateQuoteNumberDisplay();
         CustomerBox.Text = string.Empty;
         Lines.Clear();
         AddLine();
         RecalculateQuote();
         MarkDirty();
+    }
+
+    private void SaveQuoteClicked(object sender, RoutedEventArgs e)
+    {
+        if (!_quoteStore.IsAvailable())
+        {
+            StatusText.Text = "Quote store not available — check network connection.";
+            StatusText.Foreground = Brushes.Firebrick;
+            return;
+        }
+
+        try
+        {
+            var state = CaptureQuoteState();
+            _quoteNumber = _quoteStore.Save(_quoteNumber, state);
+            _hasUnsavedChanges = false;
+            UpdateQuoteNumberDisplay();
+            StatusText.Text = $"Quote saved: {_quoteNumber}";
+            StatusText.Foreground = new SolidColorBrush(Color.FromRgb(47, 133, 90));
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Save failed: {ex.Message}";
+            StatusText.Foreground = Brushes.Firebrick;
+        }
+    }
+
+    private void OpenQuoteClicked(object sender, RoutedEventArgs e)
+    {
+        if (!_quoteStore.IsAvailable())
+        {
+            StatusText.Text = "Quote store not available — check network connection.";
+            StatusText.Foreground = Brushes.Firebrick;
+            return;
+        }
+
+        var dialog = new OpenQuoteWindow(_quoteStore) { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.SelectedQuoteNumber is null)
+            return;
+
+        try
+        {
+            var entry = _quoteStore.Load(dialog.SelectedQuoteNumber);
+            if (entry is null)
+            {
+                StatusText.Text = $"Quote {dialog.SelectedQuoteNumber} not found.";
+                StatusText.Foreground = Brushes.Firebrick;
+                return;
+            }
+
+            PushUndoSnapshot();
+            _quoteNumber = entry.QuoteNumber;
+            RestoreUndoSnapshot(entry.State);
+            _hasUnsavedChanges = false;
+            UpdateQuoteNumberDisplay();
+            StatusText.Text = $"Opened quote: {_quoteNumber}";
+            StatusText.Foreground = new SolidColorBrush(Color.FromRgb(47, 133, 90));
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Open failed: {ex.Message}";
+            StatusText.Foreground = Brushes.Firebrick;
+        }
+    }
+
+    private void UpdateQuoteNumberDisplay()
+    {
+        QuoteNumberDisplay.Text = _quoteNumber ?? "Not saved";
+        QuoteNumberDisplay.FontStyle = _quoteNumber is null ? FontStyles.Italic : FontStyles.Normal;
+        QuoteNumberDisplay.Foreground = _quoteNumber is null
+            ? (Brush)FindResource("MutedBrush")
+            : new SolidColorBrush(Color.FromRgb(23, 32, 38));
+        Title = _quoteNumber is null
+            ? "Simpsons Beverages Quoting Tool"
+            : $"Simpsons Beverages Quoting Tool — {_quoteNumber}";
     }
 
     private void ExportPdfClicked(object sender, RoutedEventArgs e)

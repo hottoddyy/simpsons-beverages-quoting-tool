@@ -1,0 +1,69 @@
+<Window x:Class="SimpsonsBeverages.QuotingTool.App.OpenQuoteWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Open Quote"
+        Width="620" Height="480"
+        MinWidth="480" MinHeight="340"
+        WindowStartupLocation="CenterOwner"
+        FontFamily="Verdana"
+        Background="#eef4f7">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="12" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="12" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBox x:Name="SearchBox"
+                 Height="34" Padding="9,5"
+                 BorderBrush="#b9c6cf" BorderThickness="1"
+                 Background="White"
+                 VerticalContentAlignment="Center"
+                 FontFamily="Verdana" FontSize="12"
+                 TextChanged="SearchBoxTextChanged" />
+
+        <DataGrid Grid.Row="2"
+                  x:Name="QuoteGrid"
+                  AutoGenerateColumns="False"
+                  CanUserAddRows="False"
+                  CanUserDeleteRows="False"
+                  SelectionMode="Single"
+                  GridLinesVisibility="Horizontal"
+                  HorizontalGridLinesBrush="#e3ebef"
+                  RowHeight="30"
+                  ColumnHeaderHeight="32"
+                  Background="White"
+                  BorderBrush="#cfd8df" BorderThickness="1"
+                  FontFamily="Verdana" FontSize="12"
+                  MouseDoubleClick="QuoteGridMouseDoubleClick">
+            <DataGrid.ColumnHeaderStyle>
+                <Style TargetType="DataGridColumnHeader">
+                    <Setter Property="Background" Value="#052A61" />
+                    <Setter Property="Foreground" Value="White" />
+                    <Setter Property="FontWeight" Value="Bold" />
+                    <Setter Property="FontSize" Value="11" />
+                    <Setter Property="Padding" Value="8,0" />
+                </Style>
+            </DataGrid.ColumnHeaderStyle>
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Quote No." Binding="{Binding QuoteNumber}" Width="130" IsReadOnly="True" />
+                <DataGridTextColumn Header="Customer" Binding="{Binding Customer}" Width="*" IsReadOnly="True" />
+                <DataGridTextColumn Header="Modified" Binding="{Binding ModifiedDisplay}" Width="140" IsReadOnly="True" />
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Open" Click="OpenClicked" IsDefault="True"
+                    Height="34" MinWidth="92" Padding="14,4" Margin="0,0,8,0"
+                    Background="#052A61" Foreground="White" BorderBrush="#052A61"
+                    FontFamily="Verdana" FontSize="12" FontWeight="Bold" />
+            <Button Content="Cancel" Click="CancelClicked" IsCancel="True"
+                    Height="34" MinWidth="92" Padding="14,4"
+                    Background="#dbe5ea" Foreground="#1d3038" BorderBrush="#c7d5dc"
+                    FontFamily="Verdana" FontSize="12" FontWeight="Bold" />
+        </StackPanel>
+    </Grid>
+</Window>
