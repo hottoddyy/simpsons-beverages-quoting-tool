@@ -3,10 +3,12 @@ using System.ComponentModel;
 using System.Globalization;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using Microsoft.Win32;
 using SimpsonsBeverages.QuotingTool.Calculations;
@@ -15,6 +17,58 @@ namespace SimpsonsBeverages.QuotingTool.App;
 
 public partial class MainWindow : Window
 {
+    // ── DWM title bar colouring ──────────────────────────────────────────────
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, uint attr, ref int attrValue, uint attrSize);
+
+    private const uint DwmwaCaption_Color = 35; // DWMWA_CAPTION_COLOR
+
+    // BGR integer for #052A61 (navy)
+    private static readonly int NavyBgr = unchecked((int)0x00612A05);
+    // BGR integer for #1a1a2e (dark navy) used in dark mode
+    private static readonly int DarkNavyBgr = unchecked((int)0x002e1a1a);
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        SetTitleBarColour(NavyBgr);
+    }
+
+    private void SetTitleBarColour(int colourBgr)
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd != IntPtr.Zero)
+            DwmSetWindowAttribute(hwnd, DwmwaCaption_Color, ref colourBgr, sizeof(int));
+    }
+
+    // ── Dark mode ────────────────────────────────────────────────────────────
+    private bool _isDarkMode;
+
+    private static string SettingsPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "SimpsonsBeverages", "QuotingTool", "settings.json");
+
+    private sealed record AppSettings(bool DarkMode);
+
+    private static AppSettings LoadSettings()
+    {
+        try
+        {
+            var json = File.ReadAllText(SettingsPath);
+            return System.Text.Json.JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings(false);
+        }
+        catch { return new AppSettings(false); }
+    }
+
+    private static void SaveSettings(AppSettings settings)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+            File.WriteAllText(SettingsPath, System.Text.Json.JsonSerializer.Serialize(settings));
+        }
+        catch { /* non-critical — ignore */ }
+    }
     private readonly List<FormatDefinition> _formats =
     [
         FormatDefinition.FromMaster("MANUAL LINE", CalculationKind.Bulk, 1m, "LITRE", 1m, 6m, []),
@@ -143,7 +197,7 @@ public partial class MainWindow : Window
     ];
     private const string MasterTemplatePath = @"\\adserver2\Company Share\Sales\Quotes\COSTING MASTER TEMPLATE V4.1.2.3.xlsm";
     private const string BundledMasterTemplatePath = "Templates\\costing-template.xlsx";
-    private const string QuoteSaveRoot = @"\\adserver2\Company Share\Sales\Quotes\2026";
+    private static string QuoteSaveRoot => $@"\\adserver2\Company Share\Sales\Quotes\{DateTime.Today.Year}";
 
     private readonly QuoteStore _quoteStore = new();
     private string? _quoteNumber;
@@ -160,14 +214,16 @@ public partial class MainWindow : Window
     private DataGridColumn? _fillDragSourceColumn;
     private bool _isRestoringUndo;
     private bool _isCellEditUndoCaptured;
-    private readonly Stack<QuoteStateSnapshot> _undoStack = new();
+    // Lists used as stacks (last element = top). List allows cheap removal
+    // from index 0 (oldest entry) without rebuilding the whole collection.
+    private readonly List<QuoteStateSnapshot> _undoStack = [];
+    private readonly List<QuoteStateSnapshot> _redoStack = [];
 
     public MainWindow()
     {
         _isInitializing = true;
         InitializeComponent();
         DataContext = this;
-        FormatColumn.ItemsSource = _formats.Select(format => format.Name).ToList();
 
         AddLine();
         RecalculateQuote();
@@ -176,6 +232,86 @@ public partial class MainWindow : Window
 
         try { _quoteStore.Initialise(); }
         catch { /* network unavailable — quote store disabled */ }
+
+        // Restore dark mode preference from last session
+        var settings = LoadSettings();
+        if (settings.DarkMode)
+        {
+            _isDarkMode = true;
+            ApplyTheme(true);
+            DarkModeButton.Content = "☀";
+        }
+    }
+
+    private void DarkModeToggleClicked(object sender, RoutedEventArgs e)
+    {
+        _isDarkMode = !_isDarkMode;
+        ApplyTheme(_isDarkMode);
+        DarkModeButton.Content = _isDarkMode ? "☀" : "☾";
+        SaveSettings(new AppSettings(_isDarkMode));
+    }
+
+    private void ApplyTheme(bool dark)
+    {
+        // Replace the brush object entirely — mutating .Color fails when WPF
+        // has frozen the brush after first render.
+        void Set(string key, string hex) =>
+            Resources[key] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+
+        if (dark)
+        {
+            // Backgrounds — dark navy family
+            Set("AppBg",          "#111927");
+            Set("HeaderBg",       "#18222e");
+            Set("ToolbarBrush",   "#1c2738");
+            Set("PanelBrush",     "#1c2738");
+            Set("SoftBrush",      "#18222e");
+            Set("LineBrush",      "#2a3a50");
+            Set("GpCardBg",       "#18222e");
+            Set("RowHoverBrush",  "#22334a");
+            Set("RowSelectBrush", "#1a3d5c");
+            Set("TextBoxBg",      "#22334a");
+            Set("TextBoxBorder",  "#8CBECF");   // accent border on inputs
+            // Text — two colours only: near-white for primary, pale blue for secondary
+            Set("InkBrush",       "#eaf2f8");   // primary text
+            Set("TitleFg",        "#eaf2f8");   // headings — same as body
+            Set("MutedBrush",     "#8CBECF");   // secondary text = accent colour
+            Set("GpLabelFg",      "#eaf2f8");
+            Set("GpSubFg",        "#8CBECF");
+            // Accent elements — brand pale blue, navy text on top
+            Set("AccentBrush",    "#8CBECF");
+            Set("AccentFg",       "#052A61");
+            LogoColor.Visibility = Visibility.Collapsed;
+            LogoWhite.Visibility = Visibility.Visible;
+            SetTitleBarColour(DarkNavyBgr);
+        }
+        else
+        {
+            Set("AppBg",          "#eef4f7");
+            Set("HeaderBg",       "#ffffff");
+            Set("ToolbarBrush",   "#f2f7fa");
+            Set("PanelBrush",     "#ffffff");
+            Set("SoftBrush",      "#f7fbfc");
+            Set("LineBrush",      "#cfd8df");
+            Set("InkBrush",       "#172026");
+            Set("MutedBrush",     "#64707a");
+            Set("RowHoverBrush",  "#edf3f7");
+            Set("RowSelectBrush", "#d4e8f2");
+            Set("TextBoxBg",      "#ffffff");
+            Set("TextBoxBorder",  "#8a9fad");
+            Set("TitleFg",        "#052A61");
+            Set("GpLabelFg",      "#394b59");
+            Set("GpSubFg",        "#596775");
+            Set("GpCardBg",       "#d8dee6");
+            Set("AccentBrush",    "#052A61");
+            Set("AccentFg",       "#ffffff");
+            LogoColor.Visibility = Visibility.Visible;
+            LogoWhite.Visibility = Visibility.Collapsed;
+            SetTitleBarColour(NavyBgr);
+        }
+
+        // Re-run to repaint the GP display with correct ink colour for new theme
+        UpdateAverageGp();
     }
 
     private void HeaderInputChanged(object sender, TextChangedEventArgs e)
@@ -214,6 +350,25 @@ public partial class MainWindow : Window
         base.OnClosing(e);
     }
 
+    private void WindowPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        // Let a TextBox with its own undo history handle Ctrl+Z / Ctrl+Y itself.
+        if (Keyboard.FocusedElement is TextBox { CanUndo: true })
+            return;
+
+        if (Keyboard.Modifiers != ModifierKeys.Control)
+            return;
+
+        if (e.Key == Key.Z)
+        {
+            if (TryUndo()) e.Handled = true;
+        }
+        else if (e.Key == Key.Y)
+        {
+            if (TryRedo()) e.Handled = true;
+        }
+    }
+
     private void AddLineClicked(object sender, RoutedEventArgs e)
     {
         PushUndoSnapshot();
@@ -248,13 +403,20 @@ public partial class MainWindow : Window
         MarkDirty();
     }
 
-    private void RecalculateClicked(object sender, RoutedEventArgs e)
-    {
-        RecalculateQuote();
-    }
-
     private void ResetClicked(object sender, RoutedEventArgs e)
     {
+        if (Lines.Any(l => l.HasCalculation) || !string.IsNullOrWhiteSpace(CustomerBox.Text))
+        {
+            var result = MessageBox.Show(
+                this,
+                "This will clear all lines and the customer name. Are you sure?",
+                "Reset quote",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (result != MessageBoxResult.Yes) return;
+        }
+
         PushUndoSnapshot();
         _quoteNumber = null;
         UpdateQuoteNumberDisplay();
@@ -267,26 +429,17 @@ public partial class MainWindow : Window
 
     private void SaveQuoteClicked(object sender, RoutedEventArgs e)
     {
-        if (!_quoteStore.IsAvailable())
-        {
-            StatusText.Text = "Quote store not available — check network connection.";
-            StatusText.Foreground = Brushes.Firebrick;
-            return;
-        }
-
         try
         {
             var state = CaptureQuoteState();
             _quoteNumber = _quoteStore.Save(_quoteNumber, state);
             _hasUnsavedChanges = false;
             UpdateQuoteNumberDisplay();
-            StatusText.Text = $"Quote saved: {_quoteNumber}";
-            StatusText.Foreground = new SolidColorBrush(Color.FromRgb(47, 133, 90));
+            SetStatus($"Quote saved: {_quoteNumber}");
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Save failed: {ex.Message}";
-            StatusText.Foreground = Brushes.Firebrick;
+            SetStatus(NetworkMessage(ex), isError: true);
         }
     }
 
@@ -294,8 +447,7 @@ public partial class MainWindow : Window
     {
         if (!_quoteStore.IsAvailable())
         {
-            StatusText.Text = "Quote store not available — check network connection.";
-            StatusText.Foreground = Brushes.Firebrick;
+            SetStatus(@"Cannot reach the quote store on \\adserver2. Check you are connected to the office network, then try again.", isError: true);
             return;
         }
 
@@ -308,8 +460,7 @@ public partial class MainWindow : Window
             var entry = _quoteStore.Load(dialog.SelectedQuoteNumber);
             if (entry is null)
             {
-                StatusText.Text = $"Quote {dialog.SelectedQuoteNumber} not found.";
-                StatusText.Foreground = Brushes.Firebrick;
+                SetStatus($"Quote {dialog.SelectedQuoteNumber} not found.", isError: true);
                 return;
             }
 
@@ -318,13 +469,11 @@ public partial class MainWindow : Window
             RestoreUndoSnapshot(entry.State);
             _hasUnsavedChanges = false;
             UpdateQuoteNumberDisplay();
-            StatusText.Text = $"Opened quote: {_quoteNumber}";
-            StatusText.Foreground = new SolidColorBrush(Color.FromRgb(47, 133, 90));
+            SetStatus($"Opened quote: {_quoteNumber}");
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Open failed: {ex.Message}";
-            StatusText.Foreground = Brushes.Firebrick;
+            SetStatus(NetworkMessage(ex), isError: true);
         }
     }
 
@@ -352,8 +501,7 @@ public partial class MainWindow : Window
 
         if (quote.Lines.Count == 0)
         {
-            StatusText.Text = "Add at least one valid quote line before exporting.";
-            StatusText.Foreground = Brushes.Firebrick;
+            SetStatus("Add at least one valid quote line before exporting.", isError: true);
             return false;
         }
 
@@ -370,8 +518,7 @@ public partial class MainWindow : Window
         }
 
         SimplePdfExporter.Export(dialog.FileName, quote);
-        StatusText.Text = $"PDF exported: {dialog.FileName}";
-        StatusText.Foreground = new SolidColorBrush(Color.FromRgb(47, 133, 90));
+        SetStatus($"PDF exported: {dialog.FileName}");
         _hasUnsavedChanges = false;
         return true;
     }
@@ -401,13 +548,11 @@ public partial class MainWindow : Window
 
             PushUndoSnapshot();
             LoadImportedLines(imported);
-            StatusText.Text = $"Imported {imported.Count} line(s): {dialog.FileName}";
-            StatusText.Foreground = new SolidColorBrush(Color.FromRgb(47, 133, 90));
+            SetStatus($"Imported {imported.Count} line(s): {dialog.FileName}");
         }
         catch (Exception ex)
         {
-            StatusText.Text = ex.Message;
-            StatusText.Foreground = Brushes.Firebrick;
+            SetStatus(ex.Message, isError: true);
         }
     }
 
@@ -441,20 +586,17 @@ public partial class MainWindow : Window
             var imported = LegacyCostingWorkbookIo.ImportSheet(dialog.FileName, picker.SelectedSheetName, picker.SelectedFormatName);
             if (imported.Count == 0)
             {
-                StatusText.Text = $"No quote lines found in tab '{picker.SelectedSheetName}'.";
-                StatusText.Foreground = Brushes.Firebrick;
+                SetStatus($"No quote lines found in tab '{picker.SelectedSheetName}'.", isError: true);
                 return;
             }
 
             PushUndoSnapshot();
             LoadImportedLines(imported);
-            StatusText.Text = $"Imported {imported.Count} line(s) from '{picker.SelectedSheetName}' as {picker.SelectedFormatName}.";
-            StatusText.Foreground = new SolidColorBrush(Color.FromRgb(47, 133, 90));
+            SetStatus($"Imported {imported.Count} line(s) from '{picker.SelectedSheetName}' as {picker.SelectedFormatName}.");
         }
         catch (Exception ex)
         {
-            StatusText.Text = ex.Message;
-            StatusText.Foreground = Brushes.Firebrick;
+            SetStatus(ex.Message, isError: true);
         }
     }
 
@@ -464,8 +606,7 @@ public partial class MainWindow : Window
         var validLines = Lines.Where(line => line.HasCalculation).ToList();
         if (validLines.Count == 0)
         {
-            StatusText.Text = "Add at least one valid quote line before exporting Excel.";
-            StatusText.Foreground = Brushes.Firebrick;
+            SetStatus("Add at least one valid quote line before exporting Excel.", isError: true);
             return;
         }
 
@@ -487,13 +628,11 @@ public partial class MainWindow : Window
         try
         {
             LegacyCostingWorkbookIo.Export(ResolveLegacyExportTemplatePath(), dialog.FileName, validLines);
-            StatusText.Text = $"Excel exported: {dialog.FileName}";
-            StatusText.Foreground = new SolidColorBrush(Color.FromRgb(47, 133, 90));
+            SetStatus($"Excel exported: {dialog.FileName}");
         }
         catch (Exception ex)
         {
-            StatusText.Text = ex.Message;
-            StatusText.Foreground = Brushes.Firebrick;
+            SetStatus(ex.Message, isError: true);
         }
     }
 
@@ -654,13 +793,40 @@ public partial class MainWindow : Window
         }
     }
 
+    private void MoveLineUpClicked(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not QuoteLineViewModel line) return;
+        var idx = Lines.IndexOf(line);
+        if (idx <= 0) return;
+        PushUndoSnapshot();
+        Lines.Move(idx, idx - 1);
+        RenumberLines();
+        MarkDirty();
+    }
+
+    private void MoveLineDownClicked(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not QuoteLineViewModel line) return;
+        var idx = Lines.IndexOf(line);
+        if (idx < 0 || idx >= Lines.Count - 1) return;
+        PushUndoSnapshot();
+        Lines.Move(idx, idx + 1);
+        RenumberLines();
+        MarkDirty();
+    }
+
+    private void RenumberLines()
+    {
+        for (var i = 0; i < Lines.Count; i++)
+            Lines[i].LineNumber = i + 1;
+    }
+
     private void FormatComboBoxLoaded(object sender, RoutedEventArgs e)
     {
         if (sender is not ComboBox comboBox)
-        {
             return;
-        }
 
+        comboBox.ItemsSource = _formats.Select(format => format.Name).ToList();
         comboBox.Focus();
         Dispatcher.BeginInvoke(() => comboBox.IsDropDownOpen = true);
     }
@@ -691,21 +857,6 @@ public partial class MainWindow : Window
 
     private void QuoteGridPreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Z && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
-        {
-            if (Keyboard.FocusedElement is TextBox { CanUndo: true })
-            {
-                return;
-            }
-
-            if (TryUndo())
-            {
-                e.Handled = true;
-            }
-
-            return;
-        }
-
         if (Keyboard.FocusedElement is not TextBox ||
             e.Key is not (Key.Left or Key.Right or Key.Up or Key.Down) ||
             QuoteGrid.CurrentCell.Item is not QuoteLineViewModel currentLine ||
@@ -858,26 +1009,27 @@ public partial class MainWindow : Window
 
     private void PushUndoSnapshot(QuoteStateSnapshot snapshot)
     {
-        _undoStack.Push(snapshot);
+        _redoStack.Clear();
+        _undoStack.Add(snapshot);
         if (_undoStack.Count > 50)
-        {
-            var latest = _undoStack.Take(50).Reverse().ToList();
-            _undoStack.Clear();
-            foreach (var item in latest)
-            {
-                _undoStack.Push(item);
-            }
-        }
+            _undoStack.RemoveAt(0); // drop oldest entry
     }
 
     private bool TryUndo()
     {
-        if (_undoStack.Count == 0)
-        {
-            return false;
-        }
+        if (_undoStack.Count == 0) return false;
+        _redoStack.Add(CaptureQuoteState());
+        RestoreUndoSnapshot(_undoStack[^1]);
+        _undoStack.RemoveAt(_undoStack.Count - 1);
+        return true;
+    }
 
-        RestoreUndoSnapshot(_undoStack.Pop());
+    private bool TryRedo()
+    {
+        if (_redoStack.Count == 0) return false;
+        _undoStack.Add(CaptureQuoteState());
+        RestoreUndoSnapshot(_redoStack[^1]);
+        _redoStack.RemoveAt(_redoStack.Count - 1);
         return true;
     }
 
@@ -1105,13 +1257,12 @@ public partial class MainWindow : Window
             UpdateUsagePriceColumn();
             UpdateAverageGp();
             UpdatePreview();
-            StatusText.Text = "Calculated";
-            StatusText.Foreground = new SolidColorBrush(Color.FromRgb(89, 103, 117));
+            RenumberLines();
+            SetStatus("Calculated");
         }
         catch (Exception ex)
         {
-            StatusText.Text = ex.Message;
-            StatusText.Foreground = Brushes.Firebrick;
+            SetStatus(ex.Message, isError: true);
         }
         finally
         {
@@ -1119,18 +1270,46 @@ public partial class MainWindow : Window
         }
     }
 
+    private void SetStatus(string message, bool isError = false)
+    {
+        StatusText.Text = message;
+        var colour = isError
+            ? Color.FromRgb(176, 60, 60)
+            : Color.FromRgb(89, 103, 117);
+        StatusText.Foreground = new SolidColorBrush(colour);
+        StatusDot.Fill = new SolidColorBrush(isError
+            ? Color.FromRgb(176, 60, 60)
+            : Color.FromRgb(89, 103, 117));
+    }
+
+    // Produces a friendly message for network/IO failures so users
+    // see "check your connection" rather than a raw exception string.
+    private static string NetworkMessage(Exception ex)
+    {
+        if (ex is IOException || ex.InnerException is IOException)
+            return $@"Cannot reach the quote store on \\adserver2. Check you are connected to the office network, then try again.";
+        return $"Operation failed — {ex.Message}";
+    }
+
     private void UpdateAverageGp()
     {
         var calculatedLines = Lines.Where(line => line.HasCalculation).ToList();
         if (calculatedLines.Count == 0)
         {
-            AverageGpDisplay.Text = "-";
-            GpIndicator.Background = new SolidColorBrush(Color.FromRgb(216, 222, 230));
+            AverageGpDisplay.Text = "—";
+            AverageGpDisplay.Foreground = (Brush)FindResource("MutedBrush");
+            GpSubtitle.Text = "Add lines to calculate";
+            GpIndicator.Background = (Brush)FindResource("GpCardBg");
             return;
         }
 
         var averageGp = calculatedLines.Average(line => (double)line.TargetGpPercent) / 100d;
-        AverageGpDisplay.Text = averageGp.ToString("P2", CultureInfo.GetCultureInfo("en-GB"));
+        // Use a compact format so the badge doesn't overflow at high values
+        AverageGpDisplay.Text = averageGp >= 1d
+            ? "100%"
+            : averageGp.ToString("P1", CultureInfo.GetCultureInfo("en-GB"));
+        AverageGpDisplay.Foreground = (Brush)FindResource("InkBrush");
+        GpSubtitle.Text = $"Across {calculatedLines.Count} line{(calculatedLines.Count == 1 ? "" : "s")}";
 
         var normalized = Math.Clamp(averageGp, 0d, 0.7d) / 0.7d;
         var red = (byte)(210 - (120 * normalized));
@@ -1341,7 +1520,8 @@ public sealed class QuoteLineViewModel : INotifyPropertyChanged
         nameof(UsagePriceDisplay),
         nameof(ServeCostDisplay),
         nameof(ServeCostSummary),
-        nameof(HasCalculation)
+        nameof(HasCalculation),
+        nameof(LineNumber)   // set by MainWindow.RenumberLines, not user input
     };
 
     public static bool ShowsCostInUse(string formatName)
@@ -1369,6 +1549,7 @@ public sealed class QuoteLineViewModel : INotifyPropertyChanged
     private decimal _serveCost;
     private QuotePriceDriver _priceDriver = QuotePriceDriver.GrossProfit;
     private bool _isCalculating;
+    private int _lineNumber;
 
     public QuoteLineViewModel(IReadOnlyList<FormatDefinition> formats)
     {
@@ -1377,6 +1558,12 @@ public sealed class QuoteLineViewModel : INotifyPropertyChanged
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    public int LineNumber
+    {
+        get => _lineNumber;
+        set => SetField(ref _lineNumber, value);
+    }
 
     public bool IsMarkedForDelete
     {
@@ -1677,7 +1864,9 @@ public sealed class QuoteLineViewModel : INotifyPropertyChanged
 
     private void CalculateFromGrossProfit(FormatDefinition format)
     {
-        var grossProfit = TargetGpPercent / 100m;
+        // Cap at 99.99 % — a GP of exactly 100 % causes division by zero
+        // (price = cost / (1 − GP)) which produces ∞ or an exception.
+        var grossProfit = Math.Min(TargetGpPercent, 99.99m) / 100m;
 
         if (format.Kind == CalculationKind.Bulk)
         {

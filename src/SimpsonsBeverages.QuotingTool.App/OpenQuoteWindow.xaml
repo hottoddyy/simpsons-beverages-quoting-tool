@@ -5,7 +5,7 @@
         Width="620" Height="480"
         MinWidth="480" MinHeight="340"
         WindowStartupLocation="CenterOwner"
-        FontFamily="Verdana"
+        FontFamily="Segoe UI"
         Background="#eef4f7">
 
     <Grid Margin="20">
@@ -17,13 +17,33 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <TextBox x:Name="SearchBox"
-                 Height="34" Padding="9,5"
-                 BorderBrush="#b9c6cf" BorderThickness="1"
-                 Background="White"
-                 VerticalContentAlignment="Center"
-                 FontFamily="Verdana" FontSize="12"
-                 TextChanged="SearchBoxTextChanged" />
+        <!-- Search box with watermark -->
+        <Grid>
+            <TextBox x:Name="SearchBox"
+                     Height="34" Padding="9,5"
+                     BorderBrush="#8a9fad" BorderThickness="1.5"
+                     Background="White"
+                     VerticalContentAlignment="Center"
+                     FontFamily="Segoe UI" FontSize="12"
+                     TextChanged="SearchBoxTextChanged" />
+            <TextBlock Text="Search by quote number or customer…"
+                       IsHitTestVisible="False"
+                       Foreground="#aab8c0"
+                       Margin="11,0,0,0"
+                       VerticalAlignment="Center"
+                       FontSize="12" FontStyle="Italic">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+        </Grid>
 
         <DataGrid Grid.Row="2"
                   x:Name="QuoteGrid"
@@ -37,7 +57,7 @@
                   ColumnHeaderHeight="32"
                   Background="White"
                   BorderBrush="#cfd8df" BorderThickness="1"
-                  FontFamily="Verdana" FontSize="12"
+                  FontFamily="Segoe UI" FontSize="12"
                   MouseDoubleClick="QuoteGridMouseDoubleClick">
             <DataGrid.ColumnHeaderStyle>
                 <Style TargetType="DataGridColumnHeader">
@@ -49,9 +69,9 @@
                 </Style>
             </DataGrid.ColumnHeaderStyle>
             <DataGrid.Columns>
-                <DataGridTextColumn Header="Quote No." Binding="{Binding QuoteNumber}" Width="130" IsReadOnly="True" />
-                <DataGridTextColumn Header="Customer" Binding="{Binding Customer}" Width="*" IsReadOnly="True" />
-                <DataGridTextColumn Header="Modified" Binding="{Binding ModifiedDisplay}" Width="140" IsReadOnly="True" />
+                <DataGridTextColumn Header="Quote No." Binding="{Binding QuoteNumber}" Width="150" IsReadOnly="True" />
+                <DataGridTextColumn Header="Customer"  Binding="{Binding Customer}"    Width="*"   IsReadOnly="True" />
+                <DataGridTextColumn Header="Modified"  Binding="{Binding ModifiedDisplay}" Width="140" IsReadOnly="True" />
             </DataGrid.Columns>
         </DataGrid>
 
@@ -59,11 +79,11 @@
             <Button Content="Open" Click="OpenClicked" IsDefault="True"
                     Height="34" MinWidth="92" Padding="14,4" Margin="0,0,8,0"
                     Background="#052A61" Foreground="White" BorderBrush="#052A61"
-                    FontFamily="Verdana" FontSize="12" FontWeight="Bold" />
+                    FontFamily="Segoe UI" FontSize="12" FontWeight="Bold" />
             <Button Content="Cancel" Click="CancelClicked" IsCancel="True"
                     Height="34" MinWidth="92" Padding="14,4"
                     Background="#dbe5ea" Foreground="#1d3038" BorderBrush="#c7d5dc"
-                    FontFamily="Verdana" FontSize="12" FontWeight="Bold" />
+                    FontFamily="Segoe UI" FontSize="12" FontWeight="Bold" />
         </StackPanel>
     </Grid>
 </Window>

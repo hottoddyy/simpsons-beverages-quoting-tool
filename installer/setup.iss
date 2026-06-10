@@ -1,13 +1,13 @@
 [Setup]
 AppName=Simpsons Beverages Quoting Tool
-AppVersion=1.2.0
+AppVersion=1.3.0
 AppPublisher=Simpsons Beverages
 DefaultDirName={autopf}\Simpsons Beverages\Quoting Tool
 DefaultGroupName=Simpsons Beverages
 UninstallDisplayName=Simpsons Beverages Quoting Tool
 UninstallDisplayIcon={app}\SimpsonsBeverages.QuotingTool.App.exe
 OutputDir=..\publish
-OutputBaseFilename=SimpsonsQuotingToolSetup-v1.2.0
+OutputBaseFilename=SimpsonsQuotingToolSetup-v1.3.0
 SetupIconFile=..\src\SimpsonsBeverages.QuotingTool.App\Assets\simpsons-logo.ico
 Compression=lzma2
 SolidCompression=yes

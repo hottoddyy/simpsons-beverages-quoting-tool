@@ -20,7 +20,7 @@ public sealed class QuoteStore
     {
         if (!IsAvailable()) return;
         using var conn = Open();
-        Exec(conn, null, """
+        Exec(conn, """
             CREATE TABLE IF NOT EXISTS quotes (
                 id            INTEGER PRIMARY KEY AUTOINCREMENT,
                 quote_number  TEXT    NOT NULL UNIQUE,
@@ -36,6 +36,15 @@ public sealed class QuoteStore
                 last_sequence INTEGER NOT NULL DEFAULT 0
             );
             """);
+
+        // Ensure a global sequence counter exists (year = 0).
+        // Seeds from the highest sequence already in quotes so no number is ever
+        // re-issued, even if earlier quotes used per-year counters.
+        Exec(conn, """
+            INSERT INTO counters(year, last_sequence)
+            SELECT 0, COALESCE(MAX(sequence), 0) FROM quotes
+            ON CONFLICT(year) DO NOTHING;
+            """);
     }
 
     public string Save(string? existingNumber, QuoteStateSnapshot state)
@@ -44,12 +53,11 @@ public sealed class QuoteStore
         var json = JsonSerializer.Serialize(state, JsonOptions);
 
         using var conn = Open();
-        SetBusyTimeout(conn);
 
         if (existingNumber is not null)
         {
             using var tx = conn.BeginTransaction();
-            var cmd = conn.CreateCommand();
+            using var cmd = conn.CreateCommand();
             cmd.Transaction = tx;
             cmd.CommandText = "UPDATE quotes SET customer=$c, modified_at=$m, data=$d WHERE quote_number=$n";
             cmd.Parameters.AddWithValue("$c", state.Customer);
@@ -61,24 +69,24 @@ public sealed class QuoteStore
             return existingNumber;
         }
 
-        // BEGIN IMMEDIATE gives us a write lock before we read the counter,
-        // preventing two sessions from assigning the same sequence number.
-        Exec(conn, null, "BEGIN IMMEDIATE");
+        // BEGIN IMMEDIATE acquires the write lock before reading the counter,
+        // preventing two concurrent sessions from being assigned the same number.
+        // year = 0 is the global counter — the sequence never resets, so every
+        // quote number is unique regardless of which year it was created in.
+        Exec(conn, "BEGIN IMMEDIATE");
         try
         {
             var year = DateTime.Today.Year;
 
-            var counterCmd = conn.CreateCommand();
+            using var counterCmd = conn.CreateCommand();
             counterCmd.CommandText = """
-                INSERT INTO counters(year, last_sequence) VALUES($y, 1)
-                ON CONFLICT(year) DO UPDATE SET last_sequence = last_sequence + 1
+                UPDATE counters SET last_sequence = last_sequence + 1 WHERE year = 0
                 RETURNING last_sequence
                 """;
-            counterCmd.Parameters.AddWithValue("$y", year);
             var sequence = Convert.ToInt32(counterCmd.ExecuteScalar());
             var quoteNumber = $"SB-{year}-{sequence:D4}";
 
-            var insertCmd = conn.CreateCommand();
+            using var insertCmd = conn.CreateCommand();
             insertCmd.CommandText = """
                 INSERT INTO quotes(quote_number, year, sequence, customer, created_at, modified_at, data)
                 VALUES($n, $y, $s, $c, $ca, $m, $d)
@@ -92,12 +100,12 @@ public sealed class QuoteStore
             insertCmd.Parameters.AddWithValue("$d", json);
             insertCmd.ExecuteNonQuery();
 
-            Exec(conn, null, "COMMIT");
+            Exec(conn, "COMMIT");
             return quoteNumber;
         }
         catch
         {
-            try { Exec(conn, null, "ROLLBACK"); } catch { /* ignore */ }
+            try { Exec(conn, "ROLLBACK"); } catch { /* ignore */ }
             throw;
         }
     }
@@ -105,7 +113,7 @@ public sealed class QuoteStore
     public QuoteStoreEntry? Load(string quoteNumber)
     {
         using var conn = Open();
-        var cmd = conn.CreateCommand();
+        using var cmd = conn.CreateCommand();
         cmd.CommandText = "SELECT quote_number, customer, created_at, modified_at, data FROM quotes WHERE quote_number=$n";
         cmd.Parameters.AddWithValue("$n", quoteNumber);
         using var reader = cmd.ExecuteReader();
@@ -114,20 +122,30 @@ public sealed class QuoteStore
         var state = JsonSerializer.Deserialize<QuoteStateSnapshot>(reader.GetString(4), JsonOptions);
         if (state is null) return null;
 
-        return new QuoteStoreEntry(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), state);
+        return new QuoteStoreEntry(
+            reader.GetString(0),
+            reader.GetString(1),
+            reader.GetString(2),
+            reader.GetString(3),
+            state);
     }
 
     public IReadOnlyList<QuoteStoreSummary> List(string? search = null)
     {
         using var conn = Open();
-        var cmd = conn.CreateCommand();
+        using var cmd = conn.CreateCommand();
+
         if (string.IsNullOrWhiteSpace(search))
         {
             cmd.CommandText = "SELECT quote_number, customer, modified_at FROM quotes ORDER BY id DESC LIMIT 300";
         }
         else
         {
-            cmd.CommandText = "SELECT quote_number, customer, modified_at FROM quotes WHERE quote_number LIKE $s OR customer LIKE $s ORDER BY id DESC LIMIT 300";
+            cmd.CommandText = """
+                SELECT quote_number, customer, modified_at FROM quotes
+                WHERE quote_number LIKE $s OR customer LIKE $s
+                ORDER BY id DESC LIMIT 300
+                """;
             cmd.Parameters.AddWithValue("$s", $"%{search}%");
         }
 
@@ -138,20 +156,21 @@ public sealed class QuoteStore
         return results;
     }
 
+    // Opens a connection with a 5-second busy timeout so all operations
+    // (reads and writes) wait gracefully under concurrent access.
     private static SqliteConnection Open()
     {
         var conn = new SqliteConnection($"Data Source={DbPath}");
         conn.Open();
+        using var pragma = conn.CreateCommand();
+        pragma.CommandText = "PRAGMA busy_timeout = 5000";
+        pragma.ExecuteNonQuery();
         return conn;
     }
 
-    private static void SetBusyTimeout(SqliteConnection conn) =>
-        Exec(conn, null, "PRAGMA busy_timeout = 5000");
-
-    private static void Exec(SqliteConnection conn, SqliteTransaction? tx, string sql)
+    private static void Exec(SqliteConnection conn, string sql)
     {
-        var cmd = conn.CreateCommand();
-        cmd.Transaction = tx;
+        using var cmd = conn.CreateCommand();
         cmd.CommandText = sql;
         cmd.ExecuteNonQuery();
     }
