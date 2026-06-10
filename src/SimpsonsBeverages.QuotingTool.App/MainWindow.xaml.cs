@@ -971,6 +971,17 @@ public partial class MainWindow : Window
 
         AttachLine(line);
         Lines.Add(line);
+
+        // Scroll the grid so the new (bottom) row is visible.
+        Dispatcher.BeginInvoke(() => QuoteGrid.ScrollIntoView(line));
+    }
+
+    // Select all text whenever a DataGrid editing TextBox gains focus so that
+    // typing immediately overwrites the current value rather than inserting into it.
+    private void QuoteGridTextBoxGotFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is TextBox tb)
+            Dispatcher.BeginInvoke(() => tb.SelectAll());
     }
 
     private void AttachLine(QuoteLineViewModel line)

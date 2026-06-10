@@ -428,6 +428,18 @@
                               CurrentCellChanged="QuoteGridCurrentCellChanged"
                               PreviewKeyDown="QuoteGridPreviewKeyDown"
                               ItemsSource="{Binding Lines}">
+                        <!-- Override global TextBox style inside grid cells:
+                             remove fixed Height so the box stretches to fill the
+                             row (prevents text jumping up on edit), and hook
+                             GotFocus for select-all so typing always overwrites. -->
+                        <DataGrid.Resources>
+                            <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+                                <Setter Property="Height"            Value="Auto" />
+                                <Setter Property="VerticalAlignment" Value="Stretch" />
+                                <Setter Property="Padding"           Value="3,0" />
+                                <EventSetter Event="GotFocus" Handler="QuoteGridTextBoxGotFocus" />
+                            </Style>
+                        </DataGrid.Resources>
                         <DataGrid.Columns>
                             <!-- Line number + reorder -->
                             <DataGridTemplateColumn Header="#" Width="58" CanUserSort="False" CanUserReorder="False">
