@@ -1,4 +1,7 @@
 [Setup]
+; AppId MUST remain this GUID forever — it is how Windows identifies this app
+; for upgrades. Changing it would treat every new version as a separate install.
+AppId={{F6006416-99D8-4340-B710-F82CED6F0906}
 AppName=Simpsons Beverages Quoting Tool
 AppVersion=1.3.0
 AppPublisher=Simpsons Beverages
@@ -14,6 +17,11 @@ SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=lowest
 ArchitecturesInstallIn64BitMode=x64compatible
+; Upgrade behaviour
+UsePreviousAppDir=yes
+CloseApplications=yes
+CloseApplicationsFilter=*.exe
+RestartApplications=no
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
