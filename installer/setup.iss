@@ -33,8 +33,8 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 Source: "..\src\SimpsonsBeverages.QuotingTool.App\bin\Release\net8.0-windows\win-x64\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\Simpsons Beverages\Quoting Tool"; Filename: "{app}\SimpsonsBeverages.QuotingTool.App.exe"; IconFilename: "{app}\Assets\simpsons-logo.ico"
-Name: "{autodesktop}\Simpsons Beverages Quoting Tool"; Filename: "{app}\SimpsonsBeverages.QuotingTool.App.exe"; IconFilename: "{app}\Assets\simpsons-logo.ico"; Tasks: desktopicon
+Name: "{autoprograms}\Simpsons Beverages\Quoting Tool"; Filename: "{app}\SimpsonsBeverages.QuotingTool.App.exe"; IconFilename: "{app}\SimpsonsBeverages.QuotingTool.App.exe"
+Name: "{autodesktop}\Simpsons Beverages Quoting Tool"; Filename: "{app}\SimpsonsBeverages.QuotingTool.App.exe"; IconFilename: "{app}\SimpsonsBeverages.QuotingTool.App.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\SimpsonsBeverages.QuotingTool.App.exe"; Description: "Launch Simpsons Beverages Quoting Tool"; Flags: nowait postinstall skipifsilent

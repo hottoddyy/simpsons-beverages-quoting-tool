@@ -509,7 +509,8 @@ public partial class MainWindow : Window
         {
             Title = "Export customer quote",
             Filter = "PDF files (*.pdf)|*.pdf",
-            FileName = BuildPdfFileName(quote)
+            FileName = BuildPdfFileName(quote),
+            InitialDirectory = ResolveLegacyExportInitialDirectory()
         };
 
         if (dialog.ShowDialog(this) != true)
@@ -660,6 +661,31 @@ public partial class MainWindow : Window
     private void QuoteGridCellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
     {
         _isCellEditUndoCaptured = false;
+
+        // Handle # column edits: parse the typed number and move the line to that position.
+        if (e.EditAction == DataGridEditAction.Commit &&
+            e.Column == LineNumberColumn &&
+            e.Row.Item is QuoteLineViewModel movedLine &&
+            FindVisualChild<TextBox>(e.Row) is { } tb &&
+            int.TryParse(tb.Text.Trim(), out var desiredPosition))
+        {
+            var currentIdx = Lines.IndexOf(movedLine);
+            var targetIdx  = Math.Clamp(desiredPosition - 1, 0, Lines.Count - 1);
+
+            if (currentIdx >= 0 && currentIdx != targetIdx)
+            {
+                Lines.Move(currentIdx, targetIdx);
+                QuoteGrid.SelectedItem = movedLine;
+                Dispatcher.BeginInvoke(() => QuoteGrid.ScrollIntoView(movedLine));
+                MarkDirty();
+            }
+
+            // Always renumber (revert the TextBox to the real position).
+            RenumberLines();
+            e.Cancel = true; // prevent binding write — RenumberLines already set the value
+            return;
+        }
+
         QueueRecalculate();
     }
 
@@ -793,31 +819,6 @@ public partial class MainWindow : Window
         }
     }
 
-    private void MoveLineUpClicked(object sender, RoutedEventArgs e)
-    {
-        if (QuoteGrid.SelectedItem is not QuoteLineViewModel line) return;
-        var idx = Lines.IndexOf(line);
-        if (idx <= 0) return;
-        PushUndoSnapshot();
-        Lines.Move(idx, idx - 1);
-        QuoteGrid.SelectedItem = line;
-        QuoteGrid.ScrollIntoView(line);
-        RenumberLines();
-        MarkDirty();
-    }
-
-    private void MoveLineDownClicked(object sender, RoutedEventArgs e)
-    {
-        if (QuoteGrid.SelectedItem is not QuoteLineViewModel line) return;
-        var idx = Lines.IndexOf(line);
-        if (idx < 0 || idx >= Lines.Count - 1) return;
-        PushUndoSnapshot();
-        Lines.Move(idx, idx + 1);
-        QuoteGrid.SelectedItem = line;
-        QuoteGrid.ScrollIntoView(line);
-        RenumberLines();
-        MarkDirty();
-    }
 
     private void RenumberLines()
     {
@@ -1493,15 +1494,7 @@ public partial class MainWindow : Window
         }
 
         var customerDirectory = Path.Combine(QuoteSaveRoot, customer);
-        try
-        {
-            Directory.CreateDirectory(customerDirectory);
-            return customerDirectory;
-        }
-        catch
-        {
-            return QuoteSaveRoot;
-        }
+        return Directory.Exists(customerDirectory) ? customerDirectory : QuoteSaveRoot;
     }
 
     private static string CleanFileName(string value)

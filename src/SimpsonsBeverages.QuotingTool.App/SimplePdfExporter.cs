@@ -192,18 +192,34 @@ public static class SimplePdfExporter
 
     private static PdfImage? LoadLogo()
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "Assets", "simpsons-logo-blue.png");
-        if (!File.Exists(path))
+        // Logo is embedded as a WPF Resource — load via pack URI.
+        // Fall back to a loose file next to the exe for dev/testing convenience.
+        BitmapImage bitmap;
+        try
         {
-            return null;
-        }
+            var packUri = new Uri("pack://application:,,,/Assets/simpsons-logo-blue.png");
+            var info = Application.GetResourceStream(packUri);
+            if (info is null) return null;
 
-        var bitmap = new BitmapImage();
-        bitmap.BeginInit();
-        bitmap.UriSource = new Uri(path);
-        bitmap.CacheOption = BitmapCacheOption.OnLoad;
-        bitmap.EndInit();
-        bitmap.Freeze();
+            bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.StreamSource = info.Stream;
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.EndInit();
+            bitmap.Freeze();
+        }
+        catch
+        {
+            var path = Path.Combine(AppContext.BaseDirectory, "Assets", "simpsons-logo-blue.png");
+            if (!File.Exists(path)) return null;
+
+            bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.UriSource = new Uri(path);
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.EndInit();
+            bitmap.Freeze();
+        }
 
         var width = bitmap.PixelWidth;
         var height = bitmap.PixelHeight;
