@@ -83,19 +83,23 @@ public static class SimplePdfExporter
             WriteText(builder, "F1", 8, 128, 640, quote.QuoteNumber);
         }
 
+        const int TableBottomMargin = 140; // leave room for footer
         var y = 618;
         DrawTableHeader(builder, y, quote.UsagePriceHeader, quote.HasServeCostColumn, quote.ServeCostHeader);
         y -= 25;
 
-        foreach (var line in quote.Lines.Take(18))
+        var drawnLines = 0;
+        foreach (var line in quote.Lines)
         {
-            DrawQuoteLine(builder, line, y, quote.HasServeCostColumn);
-            y -= 22;
+            var rowHeight = DrawQuoteLineWrapped(builder, line, y, quote.HasServeCostColumn);
+            y -= rowHeight;
+            drawnLines++;
+            if (y < TableBottomMargin) break;
         }
 
-        if (quote.Lines.Count > 18)
+        if (drawnLines < quote.Lines.Count)
         {
-            WriteText(builder, "F1", 9, 56, y, $"Plus {quote.Lines.Count - 18} further line(s).");
+            WriteText(builder, "F1", 9, 56, y, $"Plus {quote.Lines.Count - drawnLines} further line(s).");
             y -= 24;
         }
 
@@ -133,39 +137,85 @@ public static class SimplePdfExporter
         WriteText(builder, "F2", 7, 474, y, usagePriceHeader);
     }
 
-    private static void DrawQuoteLine(StringBuilder builder, QuotePdfLine line, int y, bool hasServeCostColumn)
+    // Returns the total vertical space consumed (row height + gap) so the
+    // caller can advance y correctly for the next row.
+    private static int DrawQuoteLineWrapped(StringBuilder builder, QuotePdfLine line, int y, bool hasServeCostColumn)
     {
+        const int LineSpacing  = 11; // pts between wrapped description lines
+        const int MinRowHeight = 22;
+        const int RowGap       = 1;  // gap between rows
+
+        var descMaxChars = hasServeCostColumn ? 38 : 50;
+        var descLines    = WrapText(line.Description, descMaxChars);
+        var extraLines   = Math.Max(0, descLines.Count - 1);
+        var rowHeight    = MinRowHeight + extraLines * LineSpacing;
+
+        // Background + border
         builder.AppendLine("0.97 0.985 0.99 rg");
-        builder.AppendLine($"56 {y - 8} 483 22 re f");
+        builder.AppendLine($"56 {y - 8 - extraLines * LineSpacing} 483 {rowHeight} re f");
         builder.AppendLine("0.72 0.80 0.84 RG");
-        builder.AppendLine($"56 {y - 8} 483 22 re S");
+        builder.AppendLine($"56 {y - 8 - extraLines * LineSpacing} 483 {rowHeight} re S");
         builder.AppendLine("0.08 0.10 0.12 rg");
 
         if (hasServeCostColumn)
         {
-            DrawVerticalLine(builder, 114, y - 8, 22);
-            DrawVerticalLine(builder, 310, y - 8, 22);
-            DrawVerticalLine(builder, 360, y - 8, 22);
-            DrawVerticalLine(builder, 418, y - 8, 22);
-            DrawVerticalLine(builder, 488, y - 8, 22);
-            WriteText(builder, "F1", 6, 62, y, Trim(line.Code.Replace("\\", "/", StringComparison.Ordinal), 10));
-            WriteText(builder, "F1", 6, 120, y, Trim(line.Description, 35));
+            DrawVerticalLine(builder, 114, y - 8 - extraLines * LineSpacing, rowHeight);
+            DrawVerticalLine(builder, 310, y - 8 - extraLines * LineSpacing, rowHeight);
+            DrawVerticalLine(builder, 360, y - 8 - extraLines * LineSpacing, rowHeight);
+            DrawVerticalLine(builder, 418, y - 8 - extraLines * LineSpacing, rowHeight);
+            DrawVerticalLine(builder, 488, y - 8 - extraLines * LineSpacing, rowHeight);
+            WriteText(builder, "F1", 6, 62,  y, Trim(line.Code.Replace("\\", "/", StringComparison.Ordinal), 10));
+            for (var i = 0; i < descLines.Count; i++)
+                WriteText(builder, "F1", 6, 120, y - i * LineSpacing, descLines[i]);
             WriteText(builder, "F1", 6, 318, y, Trim(line.Unit, 7));
             WriteText(builder, "F1", 6, 366, y, line.PricePerUnit);
             WriteText(builder, "F1", 6, 423, y, EmptyFallback(line.RtdPricePerLitre));
             WriteText(builder, "F1", 6, 493, y, EmptyFallback(line.ServeCost));
-            return;
+        }
+        else
+        {
+            DrawVerticalLine(builder, 116, y - 8 - extraLines * LineSpacing, rowHeight);
+            DrawVerticalLine(builder, 338, y - 8 - extraLines * LineSpacing, rowHeight);
+            DrawVerticalLine(builder, 402, y - 8 - extraLines * LineSpacing, rowHeight);
+            DrawVerticalLine(builder, 468, y - 8 - extraLines * LineSpacing, rowHeight);
+            WriteText(builder, "F1", 7, 64,  y, Trim(line.Code.Replace("\\", "/", StringComparison.Ordinal), 11));
+            for (var i = 0; i < descLines.Count; i++)
+                WriteText(builder, "F1", 7, 124, y - i * LineSpacing, descLines[i]);
+            WriteText(builder, "F1", 7, 346, y, Trim(line.Unit, 8));
+            WriteText(builder, "F1", 7, 410, y, line.PricePerUnit);
+            WriteText(builder, "F1", 7, 474, y, EmptyFallback(line.RtdPricePerLitre));
         }
 
-        DrawVerticalLine(builder, 116, y - 8, 22);
-        DrawVerticalLine(builder, 338, y - 8, 22);
-        DrawVerticalLine(builder, 402, y - 8, 22);
-        DrawVerticalLine(builder, 468, y - 8, 22);
-        WriteText(builder, "F1", 7, 64, y, Trim(line.Code.Replace("\\", "/", StringComparison.Ordinal), 11));
-        WriteText(builder, "F1", 7, 124, y, Trim(line.Description, 39));
-        WriteText(builder, "F1", 7, 346, y, Trim(line.Unit, 8));
-        WriteText(builder, "F1", 7, 410, y, line.PricePerUnit);
-        WriteText(builder, "F1", 7, 474, y, EmptyFallback(line.RtdPricePerLitre));
+        return rowHeight + RowGap;
+    }
+
+    // Word-wraps text to lines of at most maxChars characters, breaking on spaces.
+    private static List<string> WrapText(string text, int maxChars)
+    {
+        var lines  = new List<string>();
+        var words  = (text ?? string.Empty).Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var current = new System.Text.StringBuilder();
+
+        foreach (var word in words)
+        {
+            var candidate = current.Length == 0 ? word : $"{current} {word}";
+            if (candidate.Length <= maxChars)
+            {
+                current.Clear();
+                current.Append(candidate);
+            }
+            else
+            {
+                if (current.Length > 0) lines.Add(current.ToString());
+                // Long single word: hard-break it
+                current.Clear();
+                current.Append(word.Length > maxChars ? word[..maxChars] : word);
+            }
+        }
+
+        if (current.Length > 0) lines.Add(current.ToString());
+        if (lines.Count == 0)   lines.Add(string.Empty);
+        return lines;
     }
 
     private static void DrawImage(StringBuilder builder, string name, int x, int y, int width, int height)

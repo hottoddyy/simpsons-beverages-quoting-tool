@@ -1455,13 +1455,19 @@ public partial class MainWindow : Window
     private static string BuildPdfFileName(QuotePdfModel quote)
     {
         var customer = CleanFileName(string.IsNullOrWhiteSpace(quote.Customer) ? "Customer" : quote.Customer);
-        return $"{DateTime.Today:yyyy-MM-dd} {customer} Quote.pdf";
+        var prefix = string.IsNullOrWhiteSpace(quote.QuoteNumber)
+            ? DateTime.Today.ToString("yyyy-MM-dd")
+            : quote.QuoteNumber;
+        return $"{prefix} {customer} Quote.pdf";
     }
 
     private string BuildLegacyWorkbookFileName()
     {
         var customer = CleanFileName(string.IsNullOrWhiteSpace(CustomerBox.Text) ? "Customer" : CustomerBox.Text);
-        return $"{DateTime.Today:yyyy-MM-dd} {customer} Costing.xlsx";
+        var prefix = string.IsNullOrWhiteSpace(_quoteNumber)
+            ? DateTime.Today.ToString("yyyy-MM-dd")
+            : _quoteNumber;
+        return $"{prefix} {customer} Costing.xlsx";
     }
 
     private static string ResolveLegacyExportTemplatePath()
