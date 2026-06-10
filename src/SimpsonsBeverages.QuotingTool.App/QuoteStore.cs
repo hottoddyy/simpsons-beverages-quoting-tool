@@ -37,13 +37,16 @@ public sealed class QuoteStore
             );
             """);
 
-        // Ensure a global sequence counter exists (year = 0).
-        // Seeds from the highest sequence already in quotes so no number is ever
-        // re-issued, even if earlier quotes used per-year counters.
+        // Ensure the global sequence counter (year = 0) exists and is at least
+        // as high as the maximum sequence already stored.  INSERT OR IGNORE creates
+        // the row on first run; the UPDATE then bumps it up if an existing row is
+        // lower than the actual max (repairs any silent-failure state).
+        Exec(conn, "INSERT OR IGNORE INTO counters(year, last_sequence) VALUES (0, 0)");
         Exec(conn, """
-            INSERT INTO counters(year, last_sequence)
-            SELECT 0, COALESCE(MAX(sequence), 0) FROM quotes
-            ON CONFLICT(year) DO NOTHING;
+            UPDATE counters
+               SET last_sequence = (SELECT COALESCE(MAX(sequence), 0) FROM quotes)
+             WHERE year = 0
+               AND last_sequence < (SELECT COALESCE(MAX(sequence), 0) FROM quotes);
             """);
     }
 
@@ -83,7 +86,11 @@ public sealed class QuoteStore
                 UPDATE counters SET last_sequence = last_sequence + 1 WHERE year = 0
                 RETURNING last_sequence
                 """;
-            var sequence = Convert.ToInt32(counterCmd.ExecuteScalar());
+            var raw = counterCmd.ExecuteScalar();
+            if (raw is null or DBNull)
+                throw new InvalidOperationException(
+                    "Quote store counter is missing — call Initialise() before Save().");
+            var sequence = Convert.ToInt32(raw);
             var quoteNumber = $"SB-{year}-{sequence:D4}";
 
             using var insertCmd = conn.CreateCommand();

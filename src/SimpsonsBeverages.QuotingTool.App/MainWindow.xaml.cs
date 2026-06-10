@@ -795,22 +795,26 @@ public partial class MainWindow : Window
 
     private void MoveLineUpClicked(object sender, RoutedEventArgs e)
     {
-        if ((sender as FrameworkElement)?.Tag is not QuoteLineViewModel line) return;
+        if (QuoteGrid.SelectedItem is not QuoteLineViewModel line) return;
         var idx = Lines.IndexOf(line);
         if (idx <= 0) return;
         PushUndoSnapshot();
         Lines.Move(idx, idx - 1);
+        QuoteGrid.SelectedItem = line;
+        QuoteGrid.ScrollIntoView(line);
         RenumberLines();
         MarkDirty();
     }
 
     private void MoveLineDownClicked(object sender, RoutedEventArgs e)
     {
-        if ((sender as FrameworkElement)?.Tag is not QuoteLineViewModel line) return;
+        if (QuoteGrid.SelectedItem is not QuoteLineViewModel line) return;
         var idx = Lines.IndexOf(line);
         if (idx < 0 || idx >= Lines.Count - 1) return;
         PushUndoSnapshot();
         Lines.Move(idx, idx + 1);
+        QuoteGrid.SelectedItem = line;
+        QuoteGrid.ScrollIntoView(line);
         RenumberLines();
         MarkDirty();
     }
@@ -1365,6 +1369,7 @@ public partial class MainWindow : Window
         var lines = Lines.Where(line => line.HasCalculation).ToList();
         return new QuotePdfModel(
             CustomerBox.Text.Trim(),
+            _quoteNumber,
             BuildUsagePriceHeader(lines),
             lines.Any(line => line.IncludeServeCost && !string.IsNullOrWhiteSpace(line.ServeCostDisplay)),
             BuildServeCostHeader(lines),

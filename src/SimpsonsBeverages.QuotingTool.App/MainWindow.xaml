@@ -368,6 +368,8 @@
                 <!-- Action buttons -->
                 <StackPanel Grid.Row="2" Orientation="Horizontal" VerticalAlignment="Center" Height="30">
                     <Button Content="Add Line" Click="AddLineClicked" />
+                    <Button Content="▲" Click="MoveLineUpClicked"   Style="{StaticResource SecondaryButton}" ToolTip="Move selected line up"   Width="30" />
+                    <Button Content="▼" Click="MoveLineDownClicked" Style="{StaticResource SecondaryButton}" ToolTip="Move selected line down" Width="30" />
                     <Button Content="Remove"   Click="RemoveSelectedClicked" Style="{StaticResource SecondaryButton}" />
 
                     <Separator Style="{StaticResource ToolSep}" />
@@ -441,31 +443,15 @@
                             </Style>
                         </DataGrid.Resources>
                         <DataGrid.Columns>
-                            <!-- Line number + reorder -->
-                            <DataGridTemplateColumn Header="#" Width="58" CanUserSort="False" CanUserReorder="False">
+                            <!-- Line number (read-only; reorder via toolbar ▲▼ buttons) -->
+                            <DataGridTemplateColumn Header="#" Width="36" CanUserSort="False" CanUserReorder="False" IsReadOnly="True">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
-                                        <Grid Margin="4,0">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="16" />
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Text="{Binding LineNumber}"
-                                                       FontSize="11"
-                                                       Foreground="{DynamicResource MutedBrush}"
-                                                       VerticalAlignment="Center"
-                                                       HorizontalAlignment="Right"
-                                                       Margin="0,0,4,0" />
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                                <Button Content="▲" Tag="{Binding}"
-                                                        Click="MoveLineUpClicked"
-                                                        Style="{StaticResource MicroButton}"
-                                                        Margin="0,0,0,1" />
-                                                <Button Content="▼" Tag="{Binding}"
-                                                        Click="MoveLineDownClicked"
-                                                        Style="{StaticResource MicroButton}" />
-                                            </StackPanel>
-                                        </Grid>
+                                        <TextBlock Text="{Binding LineNumber}"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource MutedBrush}"
+                                                   VerticalAlignment="Center"
+                                                   HorizontalAlignment="Center" />
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>

@@ -77,6 +77,11 @@ public static class SimplePdfExporter
         WriteText(builder, "F1", 8, 128, 672, EmptyFallback(quote.Customer));
         WriteText(builder, "F2", 8, 56, 656, "Date");
         WriteText(builder, "F1", 8, 128, 656, DateTime.Today.ToString("dd/MM/yyyy"));
+        if (!string.IsNullOrWhiteSpace(quote.QuoteNumber))
+        {
+            WriteText(builder, "F2", 8, 56, 640, "Quote No.");
+            WriteText(builder, "F1", 8, 128, 640, quote.QuoteNumber);
+        }
 
         var y = 618;
         DrawTableHeader(builder, y, quote.UsagePriceHeader, quote.HasServeCostColumn, quote.ServeCostHeader);
@@ -302,6 +307,7 @@ internal sealed record PdfImage(int Width, int Height, byte[] JpegBytes);
 
 public sealed record QuotePdfModel(
     string Customer,
+    string? QuoteNumber,
     string UsagePriceHeader,
     bool HasServeCostColumn,
     string ServeCostHeader,
