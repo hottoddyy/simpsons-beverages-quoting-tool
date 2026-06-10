@@ -5,8 +5,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="Assets\simpsons-logo-blue.png"  CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="Assets\simpsons-logo-white.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Resource Include="Assets\simpsons-logo-blue.png" />
+    <Resource Include="Assets\simpsons-logo-white.png" />
     <Content Include="Assets\simpsons-logo.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="Templates\costing-template.xlsx" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
