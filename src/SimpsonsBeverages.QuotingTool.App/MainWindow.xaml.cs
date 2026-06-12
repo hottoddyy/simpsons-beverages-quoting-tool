@@ -201,6 +201,7 @@ public partial class MainWindow : Window
 
     private readonly QuoteStore _quoteStore = new();
     private string? _quoteNumber;
+    private readonly System.Windows.Threading.DispatcherTimer _autosaveTimer = new();
 
     public ObservableCollection<QuoteLineViewModel> Lines { get; } = [];
     public ObservableCollection<QuotePreviewLineViewModel> PreviewLines { get; } = [];
@@ -219,21 +220,36 @@ public partial class MainWindow : Window
     private readonly List<QuoteStateSnapshot> _undoStack = [];
     private readonly List<QuoteStateSnapshot> _redoStack = [];
 
-    public MainWindow()
+    public MainWindow(string? initialCustomer = null, QuoteStoreEntry? loadedQuote = null)
     {
         _isInitializing = true;
         InitializeComponent();
         DataContext = this;
 
-        AddLine();
-        RecalculateQuote();
-        _hasUnsavedChanges = false;
+        _autosaveTimer.Interval = TimeSpan.FromSeconds(2);
+        _autosaveTimer.Tick += (_, _) => { _autosaveTimer.Stop(); AutoSave(); };
+
+        if (loadedQuote is not null)
+        {
+            _quoteNumber = loadedQuote.QuoteNumber;
+            RestoreUndoSnapshot(loadedQuote.State);
+            _hasUnsavedChanges = false;
+        }
+        else
+        {
+            if (!string.IsNullOrWhiteSpace(initialCustomer))
+                CustomerBox.Text = initialCustomer;
+            AddLine();
+            RecalculateQuote();
+            _hasUnsavedChanges = false;
+        }
+
         _isInitializing = false;
+        UpdateQuoteNumberDisplay();
 
         try { _quoteStore.Initialise(); }
         catch { /* network unavailable — quote store disabled */ }
 
-        // Restore dark mode preference from last session
         var settings = LoadSettings();
         if (settings.DarkMode)
         {
@@ -483,7 +499,7 @@ public partial class MainWindow : Window
         QuoteNumberDisplay.FontStyle = _quoteNumber is null ? FontStyles.Italic : FontStyles.Normal;
         QuoteNumberDisplay.Foreground = _quoteNumber is null
             ? (Brush)FindResource("MutedBrush")
-            : new SolidColorBrush(Color.FromRgb(23, 32, 38));
+            : (Brush)FindResource("InkBrush");
         Title = _quoteNumber is null
             ? "Simpsons Beverages Quoting Tool"
             : $"Simpsons Beverages Quoting Tool — {_quoteNumber}";
@@ -1005,9 +1021,37 @@ public partial class MainWindow : Window
 
     private void MarkDirty()
     {
-        if (!_isInitializing && !_isRestoringUndo)
+        if (_isInitializing || _isRestoringUndo) return;
+
+        _hasUnsavedChanges = true;
+        _autosaveTimer.Stop();
+        _autosaveTimer.Start();
+    }
+
+    private void AutoSave()
+    {
+        if (!_quoteStore.IsAvailable()) return;
+
+        var customer = CustomerBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(customer)) return;
+
+        // Don't create a quote number for an empty sheet.
+        if (!Lines.Any(l => l.HasCalculation ||
+                            !string.IsNullOrWhiteSpace(l.Code) ||
+                            !string.IsNullOrWhiteSpace(l.Description)))
+            return;
+
+        try
         {
-            _hasUnsavedChanges = true;
+            var state = CaptureQuoteState();
+            _quoteNumber = _quoteStore.Save(_quoteNumber, state);
+            _hasUnsavedChanges = false;
+            UpdateQuoteNumberDisplay();
+            SetStatus($"Autosaved · {_quoteNumber}");
+        }
+        catch (Exception ex)
+        {
+            SetStatus(NetworkMessage(ex), isError: true);
         }
     }
 

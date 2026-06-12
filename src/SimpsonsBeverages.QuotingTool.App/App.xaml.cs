@@ -20,5 +20,10 @@ public partial class App : Application
             new FrameworkPropertyMetadata(XmlLanguage.GetLanguage(culture.IetfLanguageTag)));
 
         base.OnStartup(e);
+
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        var welcome = new WelcomeWindow();
+        MainWindow = welcome;
+        welcome.Show();
     }
 }

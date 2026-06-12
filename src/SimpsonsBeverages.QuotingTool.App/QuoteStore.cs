@@ -35,6 +35,12 @@ public sealed class QuoteStore
                 year          INTEGER PRIMARY KEY,
                 last_sequence INTEGER NOT NULL DEFAULT 0
             );
+            CREATE TABLE IF NOT EXISTS customers (
+                id   INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT    NOT NULL UNIQUE COLLATE NOCASE
+            );
+            INSERT OR IGNORE INTO customers(name)
+            SELECT DISTINCT customer FROM quotes WHERE TRIM(customer) != '';
             """);
 
         // Ensure the global sequence counter (year = 0) exists and is at least
@@ -108,6 +114,8 @@ public sealed class QuoteStore
             insertCmd.ExecuteNonQuery();
 
             Exec(conn, "COMMIT");
+
+            try { EnsureCustomer(state.Customer); } catch { /* non-critical */ }
             return quoteNumber;
         }
         catch
@@ -150,7 +158,7 @@ public sealed class QuoteStore
         {
             cmd.CommandText = """
                 SELECT quote_number, customer, modified_at FROM quotes
-                WHERE quote_number LIKE $s OR customer LIKE $s
+                WHERE quote_number LIKE $s OR customer LIKE $s OR data LIKE $s
                 ORDER BY id DESC LIMIT 300
                 """;
             cmd.Parameters.AddWithValue("$s", $"%{search}%");
@@ -161,6 +169,38 @@ public sealed class QuoteStore
         while (reader.Read())
             results.Add(new QuoteStoreSummary(reader.GetString(0), reader.GetString(1), reader.GetString(2)));
         return results;
+    }
+
+    public IReadOnlyList<string> GetCustomers(string? search = null)
+    {
+        using var conn = Open();
+        using var cmd  = conn.CreateCommand();
+
+        if (string.IsNullOrWhiteSpace(search))
+        {
+            cmd.CommandText = "SELECT name FROM customers ORDER BY name COLLATE NOCASE LIMIT 200";
+        }
+        else
+        {
+            cmd.CommandText = "SELECT name FROM customers WHERE name LIKE $s ORDER BY name COLLATE NOCASE LIMIT 50";
+            cmd.Parameters.AddWithValue("$s", $"%{search}%");
+        }
+
+        var results = new List<string>();
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+            results.Add(reader.GetString(0));
+        return results;
+    }
+
+    public void EnsureCustomer(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return;
+        using var conn = Open();
+        using var cmd  = conn.CreateCommand();
+        cmd.CommandText = "INSERT OR IGNORE INTO customers(name) VALUES ($n)";
+        cmd.Parameters.AddWithValue("$n", name.Trim());
+        cmd.ExecuteNonQuery();
     }
 
     // Opens a connection with a 5-second busy timeout so all operations
