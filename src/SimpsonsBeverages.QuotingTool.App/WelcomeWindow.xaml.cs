@@ -22,7 +22,7 @@ public partial class WelcomeWindow : Window
     private static int NavyBgr = unchecked((int)0x00612A05);
 
     // ── Update check ─────────────────────────────────────────────────────────
-    private const string CurrentVersion = "1.4.3";
+    private const string CurrentVersion = "1.4.4";
     private const string ReleasesApiUrl =
         "https://api.github.com/repos/hottoddyy/simpsons-beverages-quoting-tool/releases/latest";
 
@@ -344,33 +344,58 @@ public partial class WelcomeWindow : Window
     {
         if (_updateDownloadUrl is null) return;
 
-        UpdateNowBtn.IsEnabled   = false;
-        UpdateLaterBtn.IsEnabled = false;
-        UpdatePromptText.Text    = "Downloading update…";
+        // Swap buttons out for the progress bar.
+        UpdateButtonRow.Visibility   = Visibility.Collapsed;
+        UpdateProgressRow.Visibility = Visibility.Visible;
+        UpdatePromptText.Text        = "Downloading update…";
 
         try
         {
             var fileName = $"SimpsonsQuotingToolSetup-v{_updateVersion}.exe";
             var dest     = Path.Combine(Path.GetTempPath(), fileName);
 
-            // Remove any leftover file from a prior attempt before writing.
             if (File.Exists(dest)) File.Delete(dest);
 
-            using (var response   = await Http.GetStreamAsync(_updateDownloadUrl))
-            using (var fileStream = File.Create(dest))
+            // Stream download with chunk-by-chunk progress reporting.
+            using var response = await Http.GetAsync(_updateDownloadUrl, HttpCompletionOption.ResponseHeadersRead);
+            var total      = response.Content.Headers.ContentLength ?? -1L;
+            var downloaded = 0L;
+            var buffer     = new byte[81920]; // 80 KB chunks
+
+            using (var src  = await response.Content.ReadAsStreamAsync())
+            using (var dest_ = File.Create(dest))
             {
-                await response.CopyToAsync(fileStream);
+                int bytesRead;
+                while ((bytesRead = await src.ReadAsync(buffer)) > 0)
+                {
+                    await dest_.WriteAsync(buffer.AsMemory(0, bytesRead));
+                    downloaded += bytesRead;
+
+                    if (total > 0)
+                    {
+                        var pct = (int)(downloaded * 100 / total);
+                        UpdateProgressBar.Value  = pct;
+                        UpdateProgressLabel.Text = $"{pct}%  ({downloaded / 1_048_576.0:F1} / {total / 1_048_576.0:F1} MB)";
+                    }
+                }
             }
 
-            // Retry up to 5 times: AV scanners (Defender) briefly lock a
-            // newly-written exe while they scan it.
-            UpdatePromptText.Text = "Launching installer…";
+            // Silent install — no wizard, no prompts, no restart.
+            UpdateProgressBar.Value  = 100;
+            UpdatePromptText.Text    = "Installing in background…";
+            UpdateProgressLabel.Text = string.Empty;
+
+            // Retry launch: Defender briefly locks a freshly-written exe while scanning.
             var launched = false;
             for (var attempt = 0; attempt < 5 && !launched; attempt++)
             {
                 try
                 {
-                    Process.Start(new ProcessStartInfo(dest) { UseShellExecute = true });
+                    Process.Start(new ProcessStartInfo(dest)
+                    {
+                        UseShellExecute = true,
+                        Arguments       = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART"
+                    });
                     launched = true;
                 }
                 catch (Exception) when (attempt < 4)
@@ -379,21 +404,19 @@ public partial class WelcomeWindow : Window
                 }
             }
 
-            if (launched)
-            {
-                _closingIsNavigation = true;
-                Application.Current.Shutdown();
-            }
-            else
-            {
-                throw new Exception("Installer could not be launched after multiple attempts. Try running it manually from: " + dest);
-            }
+            if (!launched)
+                throw new Exception("Installer could not be launched. Try running it manually: " + dest);
+
+            _closingIsNavigation = true;
+            Application.Current.Shutdown();
         }
         catch (Exception ex)
         {
-            UpdatePromptText.Text    = $"Download failed: {ex.Message}";
-            UpdateNowBtn.IsEnabled   = true;
-            UpdateLaterBtn.IsEnabled = true;
+            UpdatePromptText.Text        = $"Update failed: {ex.Message}";
+            UpdateProgressRow.Visibility = Visibility.Collapsed;
+            UpdateButtonRow.Visibility   = Visibility.Visible;
+            UpdateNowBtn.IsEnabled       = true;
+            UpdateLaterBtn.IsEnabled     = true;
         }
     }
 
