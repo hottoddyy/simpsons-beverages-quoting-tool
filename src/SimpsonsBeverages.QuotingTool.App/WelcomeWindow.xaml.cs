@@ -22,7 +22,7 @@ public partial class WelcomeWindow : Window
     private static int NavyBgr = unchecked((int)0x00612A05);
 
     // ── Update check ─────────────────────────────────────────────────────────
-    private const string CurrentVersion = "1.4.1";
+    private const string CurrentVersion = "1.4.2";
     private const string ReleasesApiUrl =
         "https://api.github.com/repos/hottoddyy/simpsons-beverages-quoting-tool/releases/latest";
 
@@ -353,9 +353,11 @@ public partial class WelcomeWindow : Window
             var fileName = $"SimpsonsQuotingToolSetup-v{_updateVersion}.exe";
             var dest     = Path.Combine(Path.GetTempPath(), fileName);
 
-            using var response   = await Http.GetStreamAsync(_updateDownloadUrl);
-            using var fileStream = File.Create(dest);
-            await response.CopyToAsync(fileStream);
+            using (var response   = await Http.GetStreamAsync(_updateDownloadUrl))
+            using (var fileStream = File.Create(dest))
+            {
+                await response.CopyToAsync(fileStream);
+            } // fileStream flushed and closed before Process.Start
 
             _closingIsNavigation = true;
             Process.Start(new ProcessStartInfo(dest) { UseShellExecute = true });
