@@ -202,6 +202,8 @@ public partial class MainWindow : Window
     private readonly QuoteStore _quoteStore = new();
     private string? _quoteNumber;
     private readonly System.Windows.Threading.DispatcherTimer _autosaveTimer = new();
+    private bool _storeReachable;
+    private DateTime _storeReachableCheckedAt = DateTime.MinValue;
 
     public ObservableCollection<QuoteLineViewModel> Lines { get; } = [];
     public ObservableCollection<QuotePreviewLineViewModel> PreviewLines { get; } = [];
@@ -1028,9 +1030,20 @@ public partial class MainWindow : Window
         _autosaveTimer.Start();
     }
 
+    private bool StoreReachable()
+    {
+        if ((DateTime.UtcNow - _storeReachableCheckedAt).TotalSeconds > 30)
+        {
+            _storeReachable        = _quoteStore.IsAvailable();
+            _storeReachableCheckedAt = DateTime.UtcNow;
+        }
+
+        return _storeReachable;
+    }
+
     private void AutoSave()
     {
-        if (!_quoteStore.IsAvailable()) return;
+        if (!StoreReachable()) return;
 
         var customer = CustomerBox.Text.Trim();
         if (string.IsNullOrWhiteSpace(customer)) return;

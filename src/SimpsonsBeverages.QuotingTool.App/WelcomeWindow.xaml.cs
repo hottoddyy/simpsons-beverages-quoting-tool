@@ -22,7 +22,7 @@ public partial class WelcomeWindow : Window
     private static int NavyBgr = unchecked((int)0x00612A05);
 
     // ── Update check ─────────────────────────────────────────────────────────
-    private const string CurrentVersion = "1.4.0";
+    private const string CurrentVersion = "1.4.1";
     private const string ReleasesApiUrl =
         "https://api.github.com/repos/hottoddyy/simpsons-beverages-quoting-tool/releases/latest";
 
@@ -317,7 +317,8 @@ public partial class WelcomeWindow : Window
 
             Dispatcher.Invoke(() =>
             {
-                UpdatePromptText.Text   = $"Version {remoteVersionStr} is available. You have {CurrentVersion}.";
+                if (!IsLoaded) return;   // window already closed (user navigated before check finished)
+                UpdatePromptText.Text    = $"Version {remoteVersionStr} is available. You have {CurrentVersion}.";
                 UpdateOverlay.Visibility = Visibility.Visible;
             });
         }
