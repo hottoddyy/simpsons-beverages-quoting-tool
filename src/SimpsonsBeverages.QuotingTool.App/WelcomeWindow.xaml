@@ -240,6 +240,28 @@
         </Grid>
 
         <!-- ════════════════════════════════════════════════════════════ -->
+        <!--  UPDATE BANNER  (overlays all panels at the bottom)        -->
+        <!-- ════════════════════════════════════════════════════════════ -->
+        <Border x:Name="UpdateBanner" VerticalAlignment="Bottom"
+                Visibility="Collapsed"
+                Background="#fff8e1" BorderBrush="#f59e0b" BorderThickness="0,1,0,0"
+                Padding="16,8">
+            <Grid>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock x:Name="UpdateText" FontSize="12" Foreground="#78350f"
+                               VerticalAlignment="Center" FontWeight="SemiBold"/>
+                    <Button x:Name="UpdateInstallBtn" Content="Install now"
+                            Margin="12,0,0,0" Padding="12,5"
+                            Style="{StaticResource PrimaryBtn}" FontSize="12"
+                            Click="UpdateInstallClicked"/>
+                </StackPanel>
+                <Button Content="✕" HorizontalAlignment="Right"
+                        Style="{StaticResource BackBtn}" VerticalAlignment="Center"
+                        Click="UpdateDismissClicked"/>
+            </Grid>
+        </Border>
+
+        <!-- ════════════════════════════════════════════════════════════ -->
         <!--  FIND QUOTE PANEL                                           -->
         <!-- ════════════════════════════════════════════════════════════ -->
         <Grid x:Name="FindPanel" Visibility="Collapsed">

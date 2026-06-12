@@ -1,7 +1,11 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
+using System.IO;
+using System.Net.Http;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -16,6 +20,20 @@ public partial class WelcomeWindow : Window
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, uint attr, ref int attrValue, uint attrSize);
     private const uint DwmwaCaption_Color = 35;
     private static int NavyBgr = unchecked((int)0x00612A05);
+
+    // ── Update check ─────────────────────────────────────────────────────────
+    private const string CurrentVersion = "1.4.0";
+    private const string ReleasesApiUrl =
+        "https://api.github.com/repos/hottoddyy/simpsons-beverages-quoting-tool/releases/latest";
+
+    private static readonly HttpClient Http = new()
+    {
+        Timeout = TimeSpan.FromSeconds(15),
+        DefaultRequestHeaders = { { "User-Agent", "SimpsonsBeveragesQuotingTool" } }
+    };
+
+    private string? _updateDownloadUrl;
+    private string? _updateVersion;
 
     // ── State ────────────────────────────────────────────────────────────────
     private readonly QuoteStore _quoteStore = new();
@@ -53,6 +71,8 @@ public partial class WelcomeWindow : Window
             try { _quoteStore.Initialise(); }
             catch { _storeAvailable = false; }
         }
+
+        _ = CheckForUpdatesAsync();
     }
 
     protected override void OnClosing(CancelEventArgs e)
@@ -256,6 +276,88 @@ public partial class WelcomeWindow : Window
     }
 
     // ── Static helpers ───────────────────────────────────────────────────────
+
+    // ── Update check ─────────────────────────────────────────────────────────
+
+    private async Task CheckForUpdatesAsync()
+    {
+        try
+        {
+            var json = await Http.GetStringAsync(ReleasesApiUrl);
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            var tagName = root.GetProperty("tag_name").GetString();
+            if (tagName is null) return;
+
+            var remoteVersionStr = tagName.TrimStart('v');
+            if (!Version.TryParse(remoteVersionStr, out var remote)) return;
+            if (!Version.TryParse(CurrentVersion, out var current)) return;
+            if (remote <= current) return;
+
+            // Find the .exe installer asset.
+            string? assetUrl = null;
+            if (root.TryGetProperty("assets", out var assets))
+            {
+                foreach (var asset in assets.EnumerateArray())
+                {
+                    var name = asset.GetProperty("name").GetString() ?? "";
+                    if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                    {
+                        assetUrl = asset.GetProperty("browser_download_url").GetString();
+                        break;
+                    }
+                }
+            }
+
+            if (assetUrl is null) return;
+
+            _updateDownloadUrl = assetUrl;
+            _updateVersion     = remoteVersionStr;
+
+            Dispatcher.Invoke(() =>
+            {
+                UpdateText.Text        = $"Update available: v{remoteVersionStr}  —  you have v{CurrentVersion}";
+                UpdateBanner.Visibility = Visibility.Visible;
+            });
+        }
+        catch
+        {
+            // Update check is non-critical — silently ignore any network/parse error.
+        }
+    }
+
+    private async void UpdateInstallClicked(object sender, RoutedEventArgs e)
+    {
+        if (_updateDownloadUrl is null) return;
+
+        UpdateInstallBtn.IsEnabled = false;
+        UpdateText.Text            = "Downloading update…";
+
+        try
+        {
+            var fileName = $"SimpsonsQuotingToolSetup-v{_updateVersion}.exe";
+            var dest     = Path.Combine(Path.GetTempPath(), fileName);
+
+            using var response   = await Http.GetStreamAsync(_updateDownloadUrl);
+            using var fileStream = File.Create(dest);
+            await response.CopyToAsync(fileStream);
+
+            _closingIsNavigation = true;
+            Process.Start(new ProcessStartInfo(dest) { UseShellExecute = true });
+            Application.Current.Shutdown();
+        }
+        catch (Exception ex)
+        {
+            UpdateText.Text            = $"Download failed: {ex.Message}";
+            UpdateInstallBtn.IsEnabled = true;
+        }
+    }
+
+    private void UpdateDismissClicked(object sender, RoutedEventArgs e)
+    {
+        UpdateBanner.Visibility = Visibility.Collapsed;
+    }
 
     private static string GetFirstName()
     {
