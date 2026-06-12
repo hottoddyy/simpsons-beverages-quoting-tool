@@ -3,14 +3,14 @@
 ; for upgrades. Changing it would treat every new version as a separate install.
 AppId={{F6006416-99D8-4340-B710-F82CED6F0906}
 AppName=Simpsons Beverages Quoting Tool
-AppVersion=1.4.4
+AppVersion=1.4.5
 AppPublisher=Simpsons Beverages
 DefaultDirName={autopf}\Simpsons Beverages\Quoting Tool
 DefaultGroupName=Simpsons Beverages
 UninstallDisplayName=Simpsons Beverages Quoting Tool
 UninstallDisplayIcon={app}\SimpsonsBeverages.QuotingTool.App.exe
 OutputDir=..\publish
-OutputBaseFilename=SimpsonsQuotingToolSetup-v1.4.4
+OutputBaseFilename=SimpsonsQuotingToolSetup-v1.4.5
 SetupIconFile=..\src\SimpsonsBeverages.QuotingTool.App\Assets\simpsons-logo.ico
 Compression=lzma2
 SolidCompression=yes
@@ -38,3 +38,4 @@ Name: "{autodesktop}\Simpsons Beverages Quoting Tool"; Filename: "{app}\Simpsons
 
 [Run]
 Filename: "{app}\SimpsonsBeverages.QuotingTool.App.exe"; Description: "Launch Simpsons Beverages Quoting Tool"; Flags: nowait postinstall skipifsilent
+Filename: "cmd.exe"; Parameters: "/c timeout /t 2 /nobreak >nul & del /f /q ""{srcexe}"""; Flags: runhidden nowait

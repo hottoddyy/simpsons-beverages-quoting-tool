@@ -22,7 +22,7 @@ public partial class WelcomeWindow : Window
     private static int NavyBgr = unchecked((int)0x00612A05);
 
     // ── Update check ─────────────────────────────────────────────────────────
-    private const string CurrentVersion = "1.4.4";
+    private const string CurrentVersion = "1.4.5";
     private const string ReleasesApiUrl =
         "https://api.github.com/repos/hottoddyy/simpsons-beverages-quoting-tool/releases/latest";
 
