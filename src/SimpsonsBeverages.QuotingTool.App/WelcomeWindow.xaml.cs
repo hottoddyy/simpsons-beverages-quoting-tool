@@ -22,7 +22,7 @@ public partial class WelcomeWindow : Window
     private static int NavyBgr = unchecked((int)0x00612A05);
 
     // ── Update check ─────────────────────────────────────────────────────────
-    private const string CurrentVersion = "1.4.2";
+    private const string CurrentVersion = "1.4.3";
     private const string ReleasesApiUrl =
         "https://api.github.com/repos/hottoddyy/simpsons-beverages-quoting-tool/releases/latest";
 
@@ -344,7 +344,7 @@ public partial class WelcomeWindow : Window
     {
         if (_updateDownloadUrl is null) return;
 
-        UpdateNowBtn.IsEnabled  = false;
+        UpdateNowBtn.IsEnabled   = false;
         UpdateLaterBtn.IsEnabled = false;
         UpdatePromptText.Text    = "Downloading update…";
 
@@ -353,20 +353,46 @@ public partial class WelcomeWindow : Window
             var fileName = $"SimpsonsQuotingToolSetup-v{_updateVersion}.exe";
             var dest     = Path.Combine(Path.GetTempPath(), fileName);
 
+            // Remove any leftover file from a prior attempt before writing.
+            if (File.Exists(dest)) File.Delete(dest);
+
             using (var response   = await Http.GetStreamAsync(_updateDownloadUrl))
             using (var fileStream = File.Create(dest))
             {
                 await response.CopyToAsync(fileStream);
-            } // fileStream flushed and closed before Process.Start
+            }
 
-            _closingIsNavigation = true;
-            Process.Start(new ProcessStartInfo(dest) { UseShellExecute = true });
-            Application.Current.Shutdown();
+            // Retry up to 5 times: AV scanners (Defender) briefly lock a
+            // newly-written exe while they scan it.
+            UpdatePromptText.Text = "Launching installer…";
+            var launched = false;
+            for (var attempt = 0; attempt < 5 && !launched; attempt++)
+            {
+                try
+                {
+                    Process.Start(new ProcessStartInfo(dest) { UseShellExecute = true });
+                    launched = true;
+                }
+                catch (Exception) when (attempt < 4)
+                {
+                    await Task.Delay(1000);
+                }
+            }
+
+            if (launched)
+            {
+                _closingIsNavigation = true;
+                Application.Current.Shutdown();
+            }
+            else
+            {
+                throw new Exception("Installer could not be launched after multiple attempts. Try running it manually from: " + dest);
+            }
         }
         catch (Exception ex)
         {
             UpdatePromptText.Text    = $"Download failed: {ex.Message}";
-            UpdateNowBtn.IsEnabled  = true;
+            UpdateNowBtn.IsEnabled   = true;
             UpdateLaterBtn.IsEnabled = true;
         }
     }
