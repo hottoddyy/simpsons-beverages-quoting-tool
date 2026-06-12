@@ -188,7 +188,6 @@
                            FontSize="12" Foreground="#64707a" Margin="0,2,0,0"/>
             </StackPanel>
 
-            <!-- Search box with placeholder -->
             <Grid Grid.Row="2" Margin="32,0,32,0">
                 <Border BorderBrush="#cfd8df" BorderThickness="1" CornerRadius="4" Background="White">
                     <TextBox x:Name="CustomerSearchBox" FontSize="13" Padding="10,7"
@@ -197,8 +196,7 @@
                              TextChanged="CustomerSearchChanged"
                              KeyDown="CustomerSearchKeyDown"/>
                 </Border>
-                <TextBlock x:Name="CustomerPlaceholder"
-                           Text="Search or type a new customer name…"
+                <TextBlock Text="Search or type a new customer name…"
                            FontSize="13" Foreground="#b0bec5"
                            Margin="12,8,0,0" IsHitTestVisible="False">
                     <TextBlock.Style>
@@ -214,7 +212,6 @@
                 </TextBlock>
             </Grid>
 
-            <!-- Customer list -->
             <ListBox x:Name="CustomerListBox" Grid.Row="3"
                      Margin="32,4,32,0"
                      BorderThickness="1" BorderBrush="#cfd8df"
@@ -240,28 +237,6 @@
         </Grid>
 
         <!-- ════════════════════════════════════════════════════════════ -->
-        <!--  UPDATE BANNER  (overlays all panels at the bottom)        -->
-        <!-- ════════════════════════════════════════════════════════════ -->
-        <Border x:Name="UpdateBanner" VerticalAlignment="Bottom"
-                Visibility="Collapsed"
-                Background="#fff8e1" BorderBrush="#f59e0b" BorderThickness="0,1,0,0"
-                Padding="16,8">
-            <Grid>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock x:Name="UpdateText" FontSize="12" Foreground="#78350f"
-                               VerticalAlignment="Center" FontWeight="SemiBold"/>
-                    <Button x:Name="UpdateInstallBtn" Content="Install now"
-                            Margin="12,0,0,0" Padding="12,5"
-                            Style="{StaticResource PrimaryBtn}" FontSize="12"
-                            Click="UpdateInstallClicked"/>
-                </StackPanel>
-                <Button Content="✕" HorizontalAlignment="Right"
-                        Style="{StaticResource BackBtn}" VerticalAlignment="Center"
-                        Click="UpdateDismissClicked"/>
-            </Grid>
-        </Border>
-
-        <!-- ════════════════════════════════════════════════════════════ -->
         <!--  FIND QUOTE PANEL                                           -->
         <!-- ════════════════════════════════════════════════════════════ -->
         <Grid x:Name="FindPanel" Visibility="Collapsed">
@@ -283,7 +258,6 @@
                            FontSize="12" Foreground="#64707a" Margin="0,2,0,0"/>
             </StackPanel>
 
-            <!-- Search box with placeholder -->
             <Grid Grid.Row="2" Margin="32,0,32,0">
                 <Border BorderBrush="#cfd8df" BorderThickness="1" CornerRadius="4" Background="White">
                     <TextBox x:Name="FindSearchBox" FontSize="13" Padding="10,7"
@@ -291,8 +265,7 @@
                              VerticalContentAlignment="Center"
                              TextChanged="FindSearchChanged"/>
                 </Border>
-                <TextBlock x:Name="FindPlaceholder"
-                           Text="Customer name, quote number, or product code…"
+                <TextBlock Text="Customer name, quote number, or product code…"
                            FontSize="13" Foreground="#b0bec5"
                            Margin="12,8,0,0" IsHitTestVisible="False">
                     <TextBlock.Style>
@@ -308,7 +281,6 @@
                 </TextBlock>
             </Grid>
 
-            <!-- Results list -->
             <ListBox x:Name="FindListBox" Grid.Row="3"
                      Margin="32,4,32,0"
                      BorderThickness="1" BorderBrush="#cfd8df"
@@ -340,5 +312,62 @@
                     IsEnabled="False"
                     Click="OpenQuoteClicked"/>
         </Grid>
+
+        <!-- ════════════════════════════════════════════════════════════ -->
+        <!--  UPDATE PILL  — discreet bottom-right, all screens          -->
+        <!-- ════════════════════════════════════════════════════════════ -->
+        <Button x:Name="UpdatePillBtn"
+                VerticalAlignment="Bottom" HorizontalAlignment="Right"
+                Margin="0,0,12,10" Visibility="Collapsed"
+                Cursor="Hand" Click="UpdatePillClicked">
+            <Button.Template>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd" Background="#fff8e1"
+                            BorderBrush="#f59e0b" BorderThickness="1"
+                            CornerRadius="12" Padding="10,5">
+                        <TextBlock x:Name="Txt" Text="↑ Update available"
+                                   FontSize="11" FontWeight="SemiBold"
+                                   Foreground="#92400e"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="#fef3c7"/>
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="#d97706"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Button.Template>
+        </Button>
+
+        <!-- ════════════════════════════════════════════════════════════ -->
+        <!--  UPDATE PROMPT OVERLAY  — modal card on startup             -->
+        <!-- ════════════════════════════════════════════════════════════ -->
+        <Grid x:Name="UpdateOverlay" Visibility="Collapsed" Background="#66000000">
+            <Border Background="White" CornerRadius="8"
+                    Padding="28,24" MaxWidth="360"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="20" ShadowDepth="4" Opacity="0.18" Color="Black"/>
+                </Border.Effect>
+                <StackPanel>
+                    <TextBlock Text="Update available" FontSize="17" FontWeight="SemiBold"
+                               Foreground="#052A61" Margin="0,0,0,6"/>
+                    <TextBlock x:Name="UpdatePromptText" FontSize="13" Foreground="#64707a"
+                               TextWrapping="Wrap" Margin="0,0,0,22"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button x:Name="UpdateLaterBtn" Content="Later"
+                                Style="{StaticResource SecondaryBtn}"
+                                FontSize="13" Padding="20,9"
+                                Margin="0,0,10,0"
+                                Click="UpdateLaterClicked"/>
+                        <Button x:Name="UpdateNowBtn" Content="Update now"
+                                Style="{StaticResource PrimaryBtn}"
+                                FontSize="13" Padding="20,9"
+                                Click="UpdateNowClicked"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+
     </Grid>
 </Window>

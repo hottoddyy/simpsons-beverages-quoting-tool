@@ -317,8 +317,8 @@ public partial class WelcomeWindow : Window
 
             Dispatcher.Invoke(() =>
             {
-                UpdateText.Text        = $"Update available: v{remoteVersionStr}  —  you have v{CurrentVersion}";
-                UpdateBanner.Visibility = Visibility.Visible;
+                UpdatePromptText.Text   = $"Version {remoteVersionStr} is available. You have {CurrentVersion}.";
+                UpdateOverlay.Visibility = Visibility.Visible;
             });
         }
         catch
@@ -327,12 +327,25 @@ public partial class WelcomeWindow : Window
         }
     }
 
-    private async void UpdateInstallClicked(object sender, RoutedEventArgs e)
+    private void UpdateLaterClicked(object sender, RoutedEventArgs e)
+    {
+        UpdateOverlay.Visibility = Visibility.Collapsed;
+        UpdatePillBtn.Visibility  = Visibility.Visible;
+    }
+
+    private void UpdatePillClicked(object sender, RoutedEventArgs e)
+    {
+        // Re-show the prompt when they click the pill.
+        UpdateOverlay.Visibility = Visibility.Visible;
+    }
+
+    private async void UpdateNowClicked(object sender, RoutedEventArgs e)
     {
         if (_updateDownloadUrl is null) return;
 
-        UpdateInstallBtn.IsEnabled = false;
-        UpdateText.Text            = "Downloading update…";
+        UpdateNowBtn.IsEnabled  = false;
+        UpdateLaterBtn.IsEnabled = false;
+        UpdatePromptText.Text    = "Downloading update…";
 
         try
         {
@@ -349,14 +362,10 @@ public partial class WelcomeWindow : Window
         }
         catch (Exception ex)
         {
-            UpdateText.Text            = $"Download failed: {ex.Message}";
-            UpdateInstallBtn.IsEnabled = true;
+            UpdatePromptText.Text    = $"Download failed: {ex.Message}";
+            UpdateNowBtn.IsEnabled  = true;
+            UpdateLaterBtn.IsEnabled = true;
         }
-    }
-
-    private void UpdateDismissClicked(object sender, RoutedEventArgs e)
-    {
-        UpdateBanner.Visibility = Visibility.Collapsed;
     }
 
     private static string GetFirstName()
