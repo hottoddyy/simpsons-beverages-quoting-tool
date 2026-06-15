@@ -10,6 +10,7 @@ public static class LegacyCostingWorkbookIo
     private static readonly XNamespace Spreadsheet = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
     private static readonly XNamespace PackageRelationships = "http://schemas.openxmlformats.org/package/2006/relationships";
     private static readonly XNamespace OfficeRelationships = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    private static readonly XNamespace ContentTypes = "http://schemas.openxmlformats.org/package/2006/content-types";
 
     private static readonly IReadOnlyDictionary<string, LegacySheetMap> SheetMaps =
         new Dictionary<string, LegacySheetMap>(StringComparer.OrdinalIgnoreCase)
@@ -217,6 +218,7 @@ public static class LegacyCostingWorkbookIo
             }
 
             var sheet = ReadXml(archive, sheetPath);
+            StripSharedFormulas(sheet);
             ClearQuoteRows(sheet, map);
 
             for (var index = 0; index < sheetLines.Count; index++)
@@ -228,6 +230,32 @@ public static class LegacyCostingWorkbookIo
         }
 
         MarkWorkbookForRecalculation(archive);
+    }
+
+    private static void StripSharedFormulas(XDocument sheet)
+    {
+        foreach (var cell in sheet.Descendants(Spreadsheet + "c").ToList())
+        {
+            var f = cell.Element(Spreadsheet + "f");
+            if (f is null) continue;
+            var tAttr = f.Attribute("t");
+            if (tAttr?.Value != "shared") continue;
+
+            if (!string.IsNullOrEmpty(f.Value))
+            {
+                // Master shared formula: convert to plain formula
+                tAttr.Remove();
+                f.Attribute("ref")?.Remove();
+                f.Attribute("si")?.Remove();
+            }
+            else
+            {
+                // Slave cell: no formula text — clear the cell value to 0
+                cell.RemoveNodes();
+                cell.SetAttributeValue("t", null);
+                cell.Add(new XElement(Spreadsheet + "v", "0"));
+            }
+        }
     }
 
     private static void ClearQuoteRows(XDocument sheet, LegacySheetMap map)
@@ -506,7 +534,25 @@ public static class LegacyCostingWorkbookIo
         ReplaceXml(archive, "xl/workbook.xml", workbook);
 
         RemoveWorkbookCalcChainRelationship(archive);
+        RemoveCalcChainFromContentTypes(archive);
         archive.GetEntry("xl/calcChain.xml")?.Delete();
+    }
+
+    private static void RemoveCalcChainFromContentTypes(ZipArchive archive)
+    {
+        var entry = archive.GetEntry("[Content_Types].xml");
+        if (entry is null) return;
+
+        var xml = ReadXml(entry);
+        var overrides = xml.Root!
+            .Elements(ContentTypes + "Override")
+            .Where(e => string.Equals(e.Attribute("PartName")?.Value, "/xl/calcChain.xml", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (overrides.Count == 0) return;
+
+        foreach (var o in overrides) o.Remove();
+        ReplaceXml(archive, "[Content_Types].xml", xml);
     }
 
     private static void RemoveWorkbookCalcChainRelationship(ZipArchive archive)

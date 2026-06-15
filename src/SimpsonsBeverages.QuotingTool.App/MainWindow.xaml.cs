@@ -858,6 +858,15 @@ public partial class MainWindow : Window
         Dispatcher.BeginInvoke(() => comboBox.IsDropDownOpen = true);
     }
 
+    private void BagTypeComboBoxLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ComboBox comboBox)
+            return;
+
+        comboBox.Focus();
+        Dispatcher.BeginInvoke(() => comboBox.IsDropDownOpen = true);
+    }
+
     private void QuoteGridBeginningEdit(object sender, DataGridBeginningEditEventArgs e)
     {
         if (!_isCellEditUndoCaptured && e.Column != PackCostColumn)
@@ -1656,6 +1665,9 @@ public sealed class QuoteLineViewModel : INotifyPropertyChanged
             {
                 ApplyFormatDefaults();
                 OnPropertyChanged(nameof(CustomerUnit));
+                OnPropertyChanged(nameof(Is10L));
+                OnPropertyChanged(nameof(BagType));
+                OnPropertyChanged(nameof(BagTypeOptions));
             }
         }
     }
@@ -1904,6 +1916,24 @@ public sealed class QuoteLineViewModel : INotifyPropertyChanged
 
     public bool HasPackCostBreakdown => PackCostBreakdown.Count > 0;
 
+    public bool Is10L => FormatName == "10L";
+
+    public IReadOnlyList<PackCostOption> BagTypeOptions =>
+        PackCostBreakdown.FirstOrDefault(c => c.Description == "BAG")?.Options ?? [];
+
+    public PackCostOption? BagType
+    {
+        get => PackCostBreakdown.FirstOrDefault(c => c.Description == "BAG")?.SelectedOption;
+        set
+        {
+            var bag = PackCostBreakdown.FirstOrDefault(c => c.Description == "BAG");
+            if (bag is null || value is null || bag.SelectedOption == value) return;
+            bag.SelectedOption = value;
+            PackCost = PackCostBreakdown.Sum(c => c.Cost);
+            OnPropertyChanged(nameof(BagType));
+        }
+    }
+
     public bool HasCalculation => PricePerUnit > 0m && !string.IsNullOrWhiteSpace(Description);
 
     public void Calculate()
@@ -2041,6 +2071,9 @@ public sealed class QuoteLineViewModel : INotifyPropertyChanged
 
         PackCost = PackCostBreakdown.Sum(component => component.Cost);
         OnPropertyChanged(nameof(HasPackCostBreakdown));
+        OnPropertyChanged(nameof(BagType));
+        OnPropertyChanged(nameof(BagTypeOptions));
+        OnPropertyChanged(nameof(Is10L));
     }
 
     public void CopyPackCostBreakdownFrom(QuoteLineViewModel source)

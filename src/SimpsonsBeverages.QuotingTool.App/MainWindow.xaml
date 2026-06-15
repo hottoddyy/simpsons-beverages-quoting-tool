@@ -256,6 +256,7 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
     </Window.Resources>
 
     <Grid>
@@ -474,6 +475,30 @@
                                         <ComboBox SelectedItem="{Binding FormatName, UpdateSourceTrigger=PropertyChanged}"
                                                   VerticalContentAlignment="Center"
                                                   Loaded="FormatComboBoxLoaded" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellEditingTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn x:Name="BagTypeColumn" Header="Bag Type" Width="115" SortMemberPath="BagType">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Style="{StaticResource CellText}">
+                                            <TextBlock.Text>
+                                                <Binding Path="BagType.Name" />
+                                            </TextBlock.Text>
+                                            <TextBlock.Visibility>
+                                                <Binding Path="Is10L" Converter="{StaticResource BoolToVis}" />
+                                            </TextBlock.Visibility>
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                                <DataGridTemplateColumn.CellEditingTemplate>
+                                    <DataTemplate>
+                                        <ComboBox SelectedItem="{Binding BagType, UpdateSourceTrigger=PropertyChanged}"
+                                                  ItemsSource="{Binding BagTypeOptions}"
+                                                  DisplayMemberPath="Name"
+                                                  VerticalContentAlignment="Center"
+                                                  Visibility="{Binding Is10L, Converter={StaticResource BoolToVis}}"
+                                                  Loaded="BagTypeComboBoxLoaded" />
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellEditingTemplate>
                             </DataGridTemplateColumn>
