@@ -762,6 +762,12 @@ public partial class MainWindow : Window
                     textBox.SelectionLength = 0;
                     var point = Mouse.GetPosition(textBox);
                     var characterIndex = textBox.GetCharacterIndexFromPoint(point, snapToText: true);
+                    if (characterIndex >= 0)
+                    {
+                        var rect = textBox.GetRectFromCharacterIndex(characterIndex);
+                        if (point.X > rect.X + rect.Width / 2)
+                            characterIndex++;
+                    }
                     textBox.CaretIndex = Math.Clamp(characterIndex < 0 ? textBox.Text.Length : characterIndex, 0, textBox.Text.Length);
                 }
             });
