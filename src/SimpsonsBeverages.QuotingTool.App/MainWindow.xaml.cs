@@ -224,7 +224,8 @@ public partial class MainWindow : Window
     private readonly List<QuoteStateSnapshot> _undoStack = [];
     private readonly List<QuoteStateSnapshot> _redoStack = [];
 
-    public MainWindow(string? initialCustomer = null, QuoteStoreEntry? loadedQuote = null)
+    public MainWindow(string? initialCustomer = null, QuoteStoreEntry? loadedQuote = null,
+                      IReadOnlyList<LegacyCostingQuoteLine>? importedLines = null)
     {
         _isInitializing = true;
         InitializeComponent();
@@ -243,7 +244,10 @@ public partial class MainWindow : Window
         {
             if (!string.IsNullOrWhiteSpace(initialCustomer))
                 CustomerBox.Text = initialCustomer;
-            AddLine();
+            if (importedLines is { Count: > 0 })
+                LoadImportedLines(importedLines);
+            else
+                AddLine();
             RecalculateQuote();
             _hasUnsavedChanges = false;
         }

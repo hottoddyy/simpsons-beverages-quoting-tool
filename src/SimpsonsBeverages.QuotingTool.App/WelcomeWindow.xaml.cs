@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Microsoft.Win32;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
@@ -22,7 +23,7 @@ public partial class WelcomeWindow : Window
     private static int NavyBgr = unchecked((int)0x00612A05);
 
     // ── Update check ─────────────────────────────────────────────────────────
-    private const string CurrentVersion = "1.4.7";
+    private const string CurrentVersion = "1.4.8";
     private const string ReleasesApiUrl =
         "https://api.github.com/repos/hottoddyy/simpsons-beverages-quoting-tool/releases/latest";
 
@@ -397,11 +398,71 @@ public partial class WelcomeWindow : Window
         }
     }
 
+    // ── Import handlers ──────────────────────────────────────────────────────
+
+    private void ImportExcelClicked(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title  = "Import legacy costing workbook",
+            Filter = "Excel costing workbooks (*.xlsx;*.xlsm)|*.xlsx;*.xlsm|All files (*.*)|*.*"
+        };
+        if (dialog.ShowDialog(this) != true) return;
+        try
+        {
+            var imported = LegacyCostingWorkbookIo.Import(dialog.FileName);
+            if (imported.Count == 0)
+            {
+                MessageBox.Show(this, "No quote lines found in the selected workbook.",
+                    "Import", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            OpenMainWindow(null, null, imported);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Import failed: {ex.Message}",
+                "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void ImportTabClicked(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title  = "Import a specific legacy costing tab",
+            Filter = "Excel costing workbooks (*.xlsx;*.xlsm)|*.xlsx;*.xlsm|All files (*.*)|*.*"
+        };
+        if (dialog.ShowDialog(this) != true) return;
+        try
+        {
+            var sheetNames  = LegacyCostingWorkbookIo.GetSheetNames(dialog.FileName);
+            var formatNames = LegacyCostingWorkbookIo.GetImportFormatNames();
+            var picker      = new LegacyImportSheetWindow(sheetNames, formatNames) { Owner = this };
+            if (picker.ShowDialog() != true) return;
+            var imported = LegacyCostingWorkbookIo.ImportSheet(
+                dialog.FileName, picker.SelectedSheetName!, picker.SelectedFormatName!);
+            if (imported.Count == 0)
+            {
+                MessageBox.Show(this, $"No quote lines found in tab '{picker.SelectedSheetName}'.",
+                    "Import", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            OpenMainWindow(null, null, imported);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Import failed: {ex.Message}",
+                "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
     // ── Navigation helpers ───────────────────────────────────────────────────
 
-    private void OpenMainWindow(string? initialCustomer, QuoteStoreEntry? loadedQuote)
+    private void OpenMainWindow(string? initialCustomer, QuoteStoreEntry? loadedQuote,
+                                IReadOnlyList<LegacyCostingQuoteLine>? importedLines = null)
     {
-        var main = new MainWindow(initialCustomer, loadedQuote);
+        var main = new MainWindow(initialCustomer, loadedQuote, importedLines);
 
         main.Closed += (_, _) =>
         {
