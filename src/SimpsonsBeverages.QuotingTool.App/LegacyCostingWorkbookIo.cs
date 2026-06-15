@@ -210,12 +210,15 @@ public static class LegacyCostingWorkbookIo
             .GroupBy(line => ResolveExportSheetName(line.FormatName), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.Take(17).ToList(), StringComparer.OrdinalIgnoreCase);
 
+        string? firstWrittenSheetName = null;
         foreach (var (sheetName, sheetLines) in groupedLines)
         {
             if (!SheetMaps.TryGetValue(sheetName, out var map) || !sheetPaths.TryGetValue(sheetName, out var sheetPath))
             {
                 continue;
             }
+
+            firstWrittenSheetName ??= sheetName;
 
             var sheet = ReadXml(archive, sheetPath);
             StripSharedFormulas(sheet);
@@ -227,6 +230,11 @@ public static class LegacyCostingWorkbookIo
             }
 
             ReplaceXml(archive, sheetPath, sheet);
+        }
+
+        if (firstWrittenSheetName is not null)
+        {
+            SetActiveSheet(archive, firstWrittenSheetName);
         }
 
         MarkWorkbookForRecalculation(archive);
@@ -516,6 +524,45 @@ public static class LegacyCostingWorkbookIo
         }
 
         return cell;
+    }
+
+    private static void SetActiveSheet(ZipArchive archive, string sheetName)
+    {
+        var workbook = ReadXml(archive, "xl/workbook.xml");
+        var sheets = workbook.Root!.Descendants(Spreadsheet + "sheet").ToList();
+        var targetIndex = sheets.FindIndex(s => string.Equals(s.Attribute("name")?.Value, sheetName, StringComparison.OrdinalIgnoreCase));
+        if (targetIndex < 0) return;
+
+        var bookViews = workbook.Root.Element(Spreadsheet + "bookViews");
+        var workbookView = bookViews?.Element(Spreadsheet + "workbookView");
+        workbookView?.SetAttributeValue("activeTab", targetIndex.ToString(CultureInfo.InvariantCulture));
+        ReplaceXml(archive, "xl/workbook.xml", workbook);
+
+        // Mark the target sheet as selected; deselect others
+        var sheetIds = sheets.Select(s => s.Attribute(OfficeRelationships + "id")?.Value).ToList();
+        var rels = ReadXml(archive, "xl/_rels/workbook.xml.rels");
+        var relTargets = rels.Root!.Elements(PackageRelationships + "Relationship")
+            .ToDictionary(r => r.Attribute("Id")!.Value, r => r.Attribute("Target")!.Value.TrimStart('/'));
+
+        for (var i = 0; i < sheets.Count; i++)
+        {
+            var rId = sheetIds[i];
+            if (rId is null || !relTargets.TryGetValue(rId, out var relTarget)) continue;
+            var path = relTarget.StartsWith("xl/", StringComparison.OrdinalIgnoreCase) ? relTarget : $"xl/{relTarget}";
+            var sheetEntry = archive.GetEntry(path);
+            if (sheetEntry is null) continue;
+
+            var sheetDoc = ReadXml(sheetEntry);
+            var sheetView = sheetDoc.Root!.Element(Spreadsheet + "sheetViews")?.Element(Spreadsheet + "sheetView");
+            if (sheetView is null) continue;
+
+            if (i == targetIndex)
+                sheetView.SetAttributeValue("tabSelected", "1");
+            else
+                sheetView.Attribute("tabSelected")?.Remove();
+
+            ReplaceXml(archive, path, sheetDoc);
+        }
     }
 
     private static void MarkWorkbookForRecalculation(ZipArchive archive)
