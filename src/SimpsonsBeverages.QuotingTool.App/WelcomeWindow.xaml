@@ -76,6 +76,38 @@
             </Setter>
         </Style>
 
+        <Style x:Key="DangerBtn" TargetType="Button">
+            <Setter Property="Background"      Value="#c0392b"/>
+            <Setter Property="Foreground"      Value="White"/>
+            <Setter Property="FontSize"        Value="14"/>
+            <Setter Property="FontWeight"      Value="SemiBold"/>
+            <Setter Property="Padding"         Value="28,11"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                BorderThickness="0" CornerRadius="5"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#a93226"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#922b21"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Background" Value="#e8a09a"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="BackBtn" TargetType="Button">
             <Setter Property="Background"      Value="Transparent"/>
             <Setter Property="Foreground"      Value="#8CBECF"/>
@@ -161,7 +193,7 @@
 
             </StackPanel>
 
-            <TextBlock Text="v1.4.6" FontSize="11" Foreground="#c0cdd5"
+            <TextBlock Text="v1.4.7" FontSize="11" Foreground="#c0cdd5"
                        VerticalAlignment="Bottom" HorizontalAlignment="Right"
                        Margin="0,0,12,8"/>
         </Grid>
@@ -227,13 +259,18 @@
                 </ListBox.ItemTemplate>
             </ListBox>
 
-            <Button x:Name="ContinueButton" Grid.Row="4"
-                    Content="Continue →"
-                    Style="{StaticResource PrimaryBtn}"
-                    Width="148" HorizontalAlignment="Right"
-                    Margin="0,10,32,18"
-                    IsEnabled="False"
-                    Click="ContinueClicked"/>
+            <Grid Grid.Row="4" Margin="32,10,32,18">
+                <Button Content="Manage customers →"
+                        Style="{StaticResource BackBtn}"
+                        HorizontalAlignment="Left" VerticalAlignment="Center"
+                        Click="ManageCustomersClicked"/>
+                <Button x:Name="ContinueButton"
+                        Content="Continue →"
+                        Style="{StaticResource PrimaryBtn}"
+                        Width="148" HorizontalAlignment="Right"
+                        IsEnabled="False"
+                        Click="ContinueClicked"/>
+            </Grid>
         </Grid>
 
         <!-- ════════════════════════════════════════════════════════════ -->
@@ -304,13 +341,119 @@
                 </ListBox.ItemTemplate>
             </ListBox>
 
-            <Button x:Name="OpenQuoteButton" Grid.Row="4"
-                    Content="Open Quote →"
-                    Style="{StaticResource PrimaryBtn}"
-                    Width="160" HorizontalAlignment="Right"
-                    Margin="0,10,32,18"
-                    IsEnabled="False"
-                    Click="OpenQuoteClicked"/>
+            <Grid Grid.Row="4" Margin="32,10,32,18">
+                <Button x:Name="DeleteFindQuoteBtn"
+                        Content="Delete Quote"
+                        Style="{StaticResource DangerBtn}"
+                        HorizontalAlignment="Left"
+                        IsEnabled="False"
+                        Click="DeleteFindQuoteClicked"/>
+                <Button x:Name="OpenQuoteButton"
+                        Content="Open Quote →"
+                        Style="{StaticResource PrimaryBtn}"
+                        Width="160" HorizontalAlignment="Right"
+                        IsEnabled="False"
+                        Click="OpenQuoteClicked"/>
+            </Grid>
+        </Grid>
+
+        <!-- ════════════════════════════════════════════════════════════ -->
+        <!--  MANAGE CUSTOMERS PANEL                                     -->
+        <!-- ════════════════════════════════════════════════════════════ -->
+        <Grid x:Name="ManageCustomersPanel" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <Button Grid.Row="0" Content="← Back" Style="{StaticResource BackBtn}"
+                    HorizontalAlignment="Left" Margin="20,16,0,0"
+                    Click="ManageCustomersBackClicked"/>
+
+            <StackPanel Grid.Row="1" Margin="32,10,32,10">
+                <TextBlock Text="Manage Customers" FontSize="20" FontWeight="SemiBold" Foreground="#052A61"/>
+                <TextBlock x:Name="ManageSubtext"
+                           Text="Select a customer to rename or delete. Select two to merge."
+                           FontSize="12" Foreground="#64707a" Margin="0,2,0,0"/>
+            </StackPanel>
+
+            <Grid Grid.Row="2" Margin="32,0,32,0">
+                <Border BorderBrush="#cfd8df" BorderThickness="1" CornerRadius="4" Background="White">
+                    <TextBox x:Name="ManageSearchBox" FontSize="13" Padding="10,7"
+                             BorderThickness="0" Background="Transparent"
+                             VerticalContentAlignment="Center"
+                             TextChanged="ManageSearchChanged"/>
+                </Border>
+                <TextBlock Text="Search customers…"
+                           FontSize="13" Foreground="#b0bec5"
+                           Margin="12,8,0,0" IsHitTestVisible="False">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Text, ElementName=ManageSearchBox}" Value="">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </Grid>
+
+            <ListBox x:Name="ManageCustomerListBox" Grid.Row="3"
+                     Margin="32,4,32,0"
+                     BorderThickness="1" BorderBrush="#cfd8df"
+                     Background="White"
+                     SelectionMode="Extended"
+                     ItemContainerStyle="{StaticResource RowItem}"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     SelectionChanged="ManageCustomerSelectionChanged">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" FontSize="13" Foreground="#172026"/>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <Grid Grid.Row="4" Margin="32,10,32,18">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
+                    <Button x:Name="RenameCustomerBtn" Content="Rename"
+                            Style="{StaticResource SecondaryBtn}"
+                            FontSize="13" Padding="18,9" Margin="0,0,8,0"
+                            IsEnabled="False" Click="RenameCustomerClicked"/>
+                    <Button x:Name="DeleteCustomerBtn" Content="Delete"
+                            IsEnabled="False" Cursor="Hand"
+                            Margin="0,0,8,0"
+                            Click="DeleteCustomerClicked">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="Bd" Background="Transparent"
+                                        BorderBrush="#e53935" BorderThickness="1.5"
+                                        CornerRadius="5" Padding="18,9">
+                                    <TextBlock x:Name="Txt" Text="Delete" FontSize="13" FontWeight="SemiBold"
+                                               Foreground="#e53935" HorizontalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="Bd" Property="Background" Value="#fff0f0"/>
+                                    </Trigger>
+                                    <Trigger Property="IsEnabled" Value="False">
+                                        <Setter TargetName="Bd" Property="BorderBrush" Value="#cfd8df"/>
+                                        <Setter TargetName="Txt" Property="Foreground" Value="#cfd8df"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    <Button x:Name="MergeCustomerBtn" Content="Merge"
+                            Style="{StaticResource SecondaryBtn}"
+                            FontSize="13" Padding="18,9"
+                            IsEnabled="False" Click="MergeCustomerClicked"/>
+                </StackPanel>
+            </Grid>
         </Grid>
 
         <!-- ════════════════════════════════════════════════════════════ -->

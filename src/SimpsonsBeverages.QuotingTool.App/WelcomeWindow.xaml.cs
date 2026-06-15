@@ -22,7 +22,7 @@ public partial class WelcomeWindow : Window
     private static int NavyBgr = unchecked((int)0x00612A05);
 
     // ── Update check ─────────────────────────────────────────────────────────
-    private const string CurrentVersion = "1.4.6";
+    private const string CurrentVersion = "1.4.7";
     private const string ReleasesApiUrl =
         "https://api.github.com/repos/hottoddyy/simpsons-beverages-quoting-tool/releases/latest";
 
@@ -43,13 +43,16 @@ public partial class WelcomeWindow : Window
     private string? _selectedQuoteNumber;
     private bool _storeAvailable;
     private bool _closingIsNavigation;
+    private readonly bool _startOnCustomer;
 
-    public WelcomeWindow()
+    public WelcomeWindow(bool startOnCustomer = false)
     {
+        _startOnCustomer = startOnCustomer;
         InitializeComponent();
 
-        CustomerListBox.ItemsSource = _customerItems;
-        FindListBox.ItemsSource     = _findResults;
+        CustomerListBox.ItemsSource      = _customerItems;
+        FindListBox.ItemsSource          = _findResults;
+        ManageCustomerListBox.ItemsSource = _manageCustomerItems;
         GreetingText.Text           = $"Hello, {GetFirstName()}! Welcome.";
 
         // Navy title bar — must run after handle is created.
@@ -71,6 +74,8 @@ public partial class WelcomeWindow : Window
             try { _quoteStore.Initialise(); }
             catch { _storeAvailable = false; }
         }
+
+        if (_startOnCustomer) ShowCustomerPanel();
 
         _ = CheckForUpdatesAsync();
     }
@@ -200,8 +205,9 @@ public partial class WelcomeWindow : Window
     private void RefreshFindResults(string? search)
     {
         _findResults.Clear();
-        _selectedQuoteNumber     = null;
-        OpenQuoteButton.IsEnabled = false;
+        _selectedQuoteNumber         = null;
+        OpenQuoteButton.IsEnabled    = false;
+        DeleteFindQuoteBtn.IsEnabled = false;
 
         if (!_storeAvailable) return;
 
@@ -217,19 +223,40 @@ public partial class WelcomeWindow : Window
     {
         if (FindListBox.SelectedItem is QuoteStoreSummary s)
         {
-            _selectedQuoteNumber      = s.QuoteNumber;
-            OpenQuoteButton.IsEnabled = true;
+            _selectedQuoteNumber         = s.QuoteNumber;
+            OpenQuoteButton.IsEnabled    = true;
+            DeleteFindQuoteBtn.IsEnabled = true;
         }
         else
         {
-            _selectedQuoteNumber      = null;
-            OpenQuoteButton.IsEnabled = false;
+            _selectedQuoteNumber         = null;
+            OpenQuoteButton.IsEnabled    = false;
+            DeleteFindQuoteBtn.IsEnabled = false;
         }
     }
 
     private void FindListDoubleClicked(object sender, MouseButtonEventArgs e)
     {
         if (OpenQuoteButton.IsEnabled) OpenQuoteClicked(sender, e);
+    }
+
+    private void DeleteFindQuoteClicked(object sender, RoutedEventArgs e)
+    {
+        if (_selectedQuoteNumber is null) return;
+        var result = MessageBox.Show(this,
+            $"Permanently delete quote {_selectedQuoteNumber}? This cannot be undone.",
+            "Delete quote", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (result != MessageBoxResult.Yes) return;
+        try
+        {
+            _quoteStore.DeleteQuote(_selectedQuoteNumber);
+            RefreshFindResults(FindSearchBox.Text);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Could not delete quote: {ex.Message}",
+                "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void OpenQuoteClicked(object sender, RoutedEventArgs e)
@@ -255,6 +282,121 @@ public partial class WelcomeWindow : Window
         }
     }
 
+    // ── Manage customers panel ────────────────────────────────────────────
+
+    private readonly ObservableCollection<string> _manageCustomerItems = [];
+
+    private void ManageCustomersClicked(object sender, RoutedEventArgs e)
+    {
+        CustomerPanel.Visibility        = Visibility.Collapsed;
+        ManageCustomersPanel.Visibility = Visibility.Visible;
+        ManageSearchBox.Text            = string.Empty;
+        RefreshManageList(string.Empty);
+        Dispatcher.BeginInvoke(() => ManageSearchBox.Focus());
+    }
+
+    private void ManageCustomersBackClicked(object sender, RoutedEventArgs e)
+    {
+        ManageCustomersPanel.Visibility = Visibility.Collapsed;
+        CustomerPanel.Visibility        = Visibility.Visible;
+        RefreshCustomerList(CustomerSearchBox.Text);
+    }
+
+    private void ManageSearchChanged(object sender, TextChangedEventArgs e)
+        => RefreshManageList(ManageSearchBox.Text);
+
+    private void RefreshManageList(string search)
+    {
+        _manageCustomerItems.Clear();
+        if (!_storeAvailable) return;
+        try
+        {
+            foreach (var name in _quoteStore.GetCustomers(search))
+                _manageCustomerItems.Add(name);
+        }
+        catch { }
+    }
+
+    private void ManageCustomerSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        var count = ManageCustomerListBox.SelectedItems.Count;
+        RenameCustomerBtn.IsEnabled  = count == 1;
+        DeleteCustomerBtn.IsEnabled  = count == 1;
+        MergeCustomerBtn.IsEnabled   = count == 2;
+        ManageSubtext.Text = count == 2
+            ? "Click Merge to combine the two selected customers."
+            : "Select a customer to rename or delete. Select two to merge.";
+    }
+
+    private void RenameCustomerClicked(object sender, RoutedEventArgs e)
+    {
+        if (ManageCustomerListBox.SelectedItem is not string oldName) return;
+
+        var dialog = new RenameDialog(oldName) { Owner = this };
+        if (dialog.ShowDialog() != true || string.IsNullOrWhiteSpace(dialog.NewName)) return;
+        var newName = dialog.NewName.Trim();
+        if (string.Equals(newName, oldName, StringComparison.OrdinalIgnoreCase)) return;
+
+        try
+        {
+            _quoteStore.RenameCustomer(oldName, newName);
+            RefreshManageList(ManageSearchBox.Text);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Could not rename: {ex.Message}",
+                "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void DeleteCustomerClicked(object sender, RoutedEventArgs e)
+    {
+        if (ManageCustomerListBox.SelectedItem is not string name) return;
+
+        var quoteCount = 0;
+        try { quoteCount = _quoteStore.CountQuotesForCustomer(name); } catch { }
+
+        var msg = quoteCount > 0
+            ? $"Delete customer \"{name}\"? They have {quoteCount} quote{(quoteCount == 1 ? "" : "s")} which will remain in the database but no longer be linked to this customer name."
+            : $"Delete customer \"{name}\"?";
+
+        var result = MessageBox.Show(this, msg, "Delete customer",
+            MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (result != MessageBoxResult.Yes) return;
+
+        try
+        {
+            _quoteStore.DeleteCustomer(name);
+            RefreshManageList(ManageSearchBox.Text);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Could not delete: {ex.Message}",
+                "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void MergeCustomerClicked(object sender, RoutedEventArgs e)
+    {
+        if (ManageCustomerListBox.SelectedItems.Count != 2) return;
+        var a = (string)ManageCustomerListBox.SelectedItems[0]!;
+        var b = (string)ManageCustomerListBox.SelectedItems[1]!;
+
+        var dialog = new MergeDialog(a, b) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+
+        try
+        {
+            _quoteStore.MergeCustomers(dialog.FromName!, dialog.IntoName!);
+            RefreshManageList(ManageSearchBox.Text);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Could not merge: {ex.Message}",
+                "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
     // ── Navigation helpers ───────────────────────────────────────────────────
 
     private void OpenMainWindow(string? initialCustomer, QuoteStoreEntry? loadedQuote)
@@ -263,7 +405,7 @@ public partial class WelcomeWindow : Window
 
         main.Closed += (_, _) =>
         {
-            var next = new WelcomeWindow();
+            var next = new WelcomeWindow(startOnCustomer: main.ReturnToCustomerPanel);
             Application.Current.MainWindow = next;
             next.Show();
         };

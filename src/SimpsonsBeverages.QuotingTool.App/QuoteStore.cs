@@ -171,6 +171,78 @@ public sealed class QuoteStore
         return results;
     }
 
+    public void DeleteQuote(string quoteNumber)
+    {
+        using var conn = Open();
+        using var cmd  = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM quotes WHERE quote_number = $n";
+        cmd.Parameters.AddWithValue("$n", quoteNumber);
+        cmd.ExecuteNonQuery();
+    }
+
+    public int CountQuotesForCustomer(string name)
+    {
+        using var conn = Open();
+        using var cmd  = conn.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM quotes WHERE customer = $n COLLATE NOCASE";
+        cmd.Parameters.AddWithValue("$n", name.Trim());
+        return Convert.ToInt32(cmd.ExecuteScalar());
+    }
+
+    public void RenameCustomer(string oldName, string newName)
+    {
+        using var conn = Open();
+        Exec(conn, "BEGIN IMMEDIATE");
+        try
+        {
+            using var c1 = conn.CreateCommand();
+            c1.CommandText = "UPDATE customers SET name = $new WHERE name = $old COLLATE NOCASE";
+            c1.Parameters.AddWithValue("$new", newName.Trim());
+            c1.Parameters.AddWithValue("$old", oldName.Trim());
+            c1.ExecuteNonQuery();
+
+            using var c2 = conn.CreateCommand();
+            c2.CommandText = "UPDATE quotes SET customer = $new WHERE customer = $old COLLATE NOCASE";
+            c2.Parameters.AddWithValue("$new", newName.Trim());
+            c2.Parameters.AddWithValue("$old", oldName.Trim());
+            c2.ExecuteNonQuery();
+
+            Exec(conn, "COMMIT");
+        }
+        catch { try { Exec(conn, "ROLLBACK"); } catch { } throw; }
+    }
+
+    public void DeleteCustomer(string name)
+    {
+        using var conn = Open();
+        using var cmd  = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM customers WHERE name = $n COLLATE NOCASE";
+        cmd.Parameters.AddWithValue("$n", name.Trim());
+        cmd.ExecuteNonQuery();
+    }
+
+    public void MergeCustomers(string fromName, string intoName)
+    {
+        using var conn = Open();
+        Exec(conn, "BEGIN IMMEDIATE");
+        try
+        {
+            using var c1 = conn.CreateCommand();
+            c1.CommandText = "UPDATE quotes SET customer = $into WHERE customer = $from COLLATE NOCASE";
+            c1.Parameters.AddWithValue("$into", intoName.Trim());
+            c1.Parameters.AddWithValue("$from", fromName.Trim());
+            c1.ExecuteNonQuery();
+
+            using var c2 = conn.CreateCommand();
+            c2.CommandText = "DELETE FROM customers WHERE name = $from COLLATE NOCASE";
+            c2.Parameters.AddWithValue("$from", fromName.Trim());
+            c2.ExecuteNonQuery();
+
+            Exec(conn, "COMMIT");
+        }
+        catch { try { Exec(conn, "ROLLBACK"); } catch { } throw; }
+    }
+
     public IReadOnlyList<string> GetCustomers(string? search = null)
     {
         using var conn = Open();

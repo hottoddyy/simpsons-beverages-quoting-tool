@@ -18,6 +18,8 @@ public partial class OpenQuoteWindow : Window
             Refresh(null);
             SearchBox.Focus();
         };
+        QuoteGrid.SelectionChanged += (_, _) =>
+            DeleteBtn.IsEnabled = QuoteGrid.SelectedItem is QuoteRow;
     }
 
     private void Refresh(string? search)
@@ -51,6 +53,25 @@ public partial class OpenQuoteWindow : Window
     private void CancelClicked(object sender, RoutedEventArgs e)
     {
         DialogResult = false;
+    }
+
+    private void DeleteClicked(object sender, RoutedEventArgs e)
+    {
+        if (QuoteGrid.SelectedItem is not QuoteRow row) return;
+        var result = MessageBox.Show(this,
+            $"Permanently delete quote {row.QuoteNumber}? This cannot be undone.",
+            "Delete quote", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (result != MessageBoxResult.Yes) return;
+        try
+        {
+            _store.DeleteQuote(row.QuoteNumber);
+            Refresh(SearchBox.Text);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Could not delete quote: {ex.Message}",
+                "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void TryConfirm()

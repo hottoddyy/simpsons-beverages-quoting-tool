@@ -199,6 +199,8 @@ public partial class MainWindow : Window
     private const string BundledMasterTemplatePath = "Templates\\costing-template.xlsx";
     private static string QuoteSaveRoot => $@"\\adserver2\Company Share\Sales\Quotes\{DateTime.Today.Year}";
 
+    public bool ReturnToCustomerPanel { get; private set; }
+
     private readonly QuoteStore _quoteStore = new();
     private string? _quoteNumber;
     private readonly System.Windows.Threading.DispatcherTimer _autosaveTimer = new();
@@ -421,43 +423,43 @@ public partial class MainWindow : Window
         MarkDirty();
     }
 
-    private void ResetClicked(object sender, RoutedEventArgs e)
+    private void NewQuoteClicked(object sender, RoutedEventArgs e)
     {
         if (Lines.Any(l => l.HasCalculation) || !string.IsNullOrWhiteSpace(CustomerBox.Text))
         {
             var result = MessageBox.Show(
                 this,
-                "This will clear all lines and the customer name. Are you sure?",
-                "Reset quote",
-                MessageBoxButton.YesNo,
+                "Do you want to export this quote as a PDF before starting a new one?",
+                "New quote",
+                MessageBoxButton.YesNoCancel,
                 MessageBoxImage.Question);
 
-            if (result != MessageBoxResult.Yes) return;
+            if (result == MessageBoxResult.Cancel) return;
+            if (result == MessageBoxResult.Yes) TryExportPdf();
         }
 
-        PushUndoSnapshot();
-        _quoteNumber = null;
-        UpdateQuoteNumberDisplay();
-        CustomerBox.Text = string.Empty;
-        Lines.Clear();
-        AddLine();
-        RecalculateQuote();
-        MarkDirty();
+        ReturnToCustomerPanel = true;
+        Close();
     }
 
-    private void SaveQuoteClicked(object sender, RoutedEventArgs e)
+    private void DeleteQuoteClicked(object sender, RoutedEventArgs e)
     {
+        if (_quoteNumber is null) return;
+
+        var result = MessageBox.Show(this,
+            $"Permanently delete quote {_quoteNumber}? This cannot be undone.",
+            "Delete quote", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (result != MessageBoxResult.Yes) return;
+
         try
         {
-            var state = CaptureQuoteState();
-            _quoteNumber = _quoteStore.Save(_quoteNumber, state);
-            _hasUnsavedChanges = false;
-            UpdateQuoteNumberDisplay();
-            SetStatus($"Quote saved: {_quoteNumber}");
+            _quoteStore.DeleteQuote(_quoteNumber);
+            ReturnToCustomerPanel = true;
+            Close();
         }
         catch (Exception ex)
         {
-            SetStatus(NetworkMessage(ex), isError: true);
+            SetStatus($"Could not delete quote: {ex.Message}", isError: true);
         }
     }
 
@@ -499,9 +501,10 @@ public partial class MainWindow : Window
     {
         QuoteNumberDisplay.Text = _quoteNumber ?? "Not saved";
         QuoteNumberDisplay.FontStyle = _quoteNumber is null ? FontStyles.Italic : FontStyles.Normal;
-        QuoteNumberDisplay.Foreground = _quoteNumber is null
-            ? (Brush)FindResource("MutedBrush")
-            : (Brush)FindResource("InkBrush");
+        QuoteNumberDisplay.SetResourceReference(
+            ForegroundProperty,
+            _quoteNumber is null ? "MutedBrush" : "InkBrush");
+        DeleteQuoteBtn.IsEnabled = _quoteNumber is not null;
         Title = _quoteNumber is null
             ? "Simpsons Beverages Quoting Tool"
             : $"Simpsons Beverages Quoting Tool — {_quoteNumber}";
@@ -759,15 +762,6 @@ public partial class MainWindow : Window
                     textBox.SelectionLength = 0;
                     var point = Mouse.GetPosition(textBox);
                     var characterIndex = textBox.GetCharacterIndexFromPoint(point, snapToText: true);
-                    if (characterIndex >= 0)
-                    {
-                        var bounds = textBox.GetRectFromCharacterIndex(characterIndex);
-                        if (!bounds.IsEmpty && point.X > bounds.X + bounds.Width / 2d)
-                        {
-                            characterIndex++;
-                        }
-                    }
-
                     textBox.CaretIndex = Math.Clamp(characterIndex < 0 ? textBox.Text.Length : characterIndex, 0, textBox.Text.Length);
                 }
             });

@@ -396,13 +396,13 @@
                     <Separator Style="{StaticResource ToolSep}" />
 
                     <Button Content="Export Excel" Click="ExportLegacyExcelClicked" Style="{StaticResource SecondaryButton}" />
-                    <Button Content="Save Quote"   Click="SaveQuoteClicked"         Style="{StaticResource PositiveButton}" />
                     <Button Content="Open Quote"   Click="OpenQuoteClicked"         Style="{StaticResource SecondaryButton}" />
                     <Button Content="Export PDF"   Click="ExportPdfClicked"         Style="{StaticResource PositiveButton}" />
 
                     <Separator Style="{StaticResource ToolSep}" />
 
-                    <Button Content="Reset" Click="ResetClicked" Style="{StaticResource DangerButton}" />
+                    <Button Content="New Quote"    Click="NewQuoteClicked"    Style="{StaticResource SecondaryButton}" />
+                    <Button x:Name="DeleteQuoteBtn" Content="Delete Quote" Click="DeleteQuoteClicked" Style="{StaticResource DangerButton}" IsEnabled="False" />
                 </StackPanel>
             </Grid>
         </Border>
